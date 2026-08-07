@@ -1,0 +1,21 @@
+﻿Contract Classification EN,Contract Classification TH,Type of Contract EN,Type of Contract TH,Sub Type of Contract EN,Sub Type of Contract TH,Type Sort Order,Sub Type Sort Order,Standard SLA
+Day-to-day Work,งานดำเนินงานทั่วไป,Lease & Rental Agreement,สัญญาเช่าและให้เช่า,Lease Agreement,สัญญาเช่า,1,1,20
+Day-to-day Work,งานดำเนินงานทั่วไป,Lease & Rental Agreement,สัญญาเช่าและให้เช่า,Sub Lease Agreement,สัญญาเช่าช่วง,1,2,20
+Day-to-day Work,งานดำเนินงานทั่วไป,Lease & Rental Agreement,สัญญาเช่าและให้เช่า,Lease Asset Agreement,สัญญาเช่าทรัพย์สิน,1,3,20
+Day-to-day Work,งานดำเนินงานทั่วไป,Lease & Rental Agreement,สัญญาเช่าและให้เช่า,Rental Agreement,สัญญาเช่าทั่วไป,1,4,22
+Day-to-day Work,งานดำเนินงานทั่วไป,Service Agreement,สัญญาให้บริการ,,,2,0,22
+Day-to-day Work,งานดำเนินงานทั่วไป,Amendment Agreement,สัญญาแก้ไขเพิ่มเติม,,,3,0,20
+Day-to-day Work,งานดำเนินงานทั่วไป,Sale and Purchase Agreement,สัญญาซื้อขาย,,,4,0,24
+Day-to-day Work,งานดำเนินงานทั่วไป,Outsourcing Agreement,สัญญาจ้าง,,,5,0,24
+Day-to-day Work,งานดำเนินงานทั่วไป,Commercial Agreement,สัญญาทางธุรกิจ,Consultancy Agreement,สัญญาให้คำปรึกษา,6,1,24
+Day-to-day Work,งานดำเนินงานทั่วไป,Commercial Agreement,สัญญาทางธุรกิจ,Confidentiality Agreement,สัญญารักษาความลับ,6,2,20
+Day-to-day Work,งานดำเนินงานทั่วไป,Others,อื่น ๆ,,,99,0,20
+Confidential,สัญญาลับ,Preliminary Agreement,ข้อตกลงเบื้องต้น,Memorandum of Understanding,บันทึกความเข้าใจ,1,1,24
+Confidential,สัญญาลับ,Preliminary Agreement,ข้อตกลงเบื้องต้น,Term Sheet,เอกสารสรุปเงื่อนไขเบื้องต้น,1,2,24
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Consultancy Agreement,สัญญาให้คำปรึกษา,2,1,24
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Confidentiality Agreement,สัญญารักษาความลับ,2,2,20
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Management Agreement,สัญญาบริหารจัดการ,2,3,24
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Loan Agreement,สัญญาเงินกู้,2,4,28
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Mergers and Acquisitions Agreement,สัญญาการควบรวมและซื้อกิจการ,2,5,28
+Confidential,สัญญาลับ,Commercial Agreement,สัญญาทางธุรกิจ,Shareholders’ Agreement,สัญญาระหว่างผู้ถือหุ้น,2,6,28
+Confidential,สัญญาลับ,,,Others,อื่น ๆ,99,0,20

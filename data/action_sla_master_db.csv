@@ -1,0 +1,5 @@
+﻿Action,Description / รายละเอียด,Fixed SLA (Working Days),SLA Rule / วิธีนับ,Action Data Version,Active
+Submit to Review,ส่งสัญญาเข้าสู่กระบวนการตรวจสอบ,7,7 วันทำการ (เริ่มเมื่อ Add Case),2026-08-05-sla-config-updated1-v1,Yes
+Return,ส่งสัญญากลับเพื่อแก้ไขหรือเพิ่มเติมข้อมูล,3,3 วันทำการ (เมื่อได้รับ Return),2026-08-05-sla-config-updated1-v1,Yes
+Resubmit,ส่งสัญญากลับเข้าสู่กระบวนการตรวจสอบอีกครั้งหลังแก้ไข,5,5 วันทำการ (เมื่อได้รับ Resubmit),2026-08-05-sla-config-updated1-v1,Yes
+Forward,ส่งต่อสัญญาไปยังหน่วยงานหรือผู้รับผิดชอบลำดับถัดไป,5,5 วันทำการ (เมื่อได้รับ Forward),2026-08-05-sla-config-updated1-v1,Yes
