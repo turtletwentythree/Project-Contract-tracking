@@ -1,4 +1,4 @@
-const DEFAULT_FOLDER_ID = "13d9ZNEE0ijV5JfU7chg0wHrTNp500AgR";
+const DEFAULT_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {
