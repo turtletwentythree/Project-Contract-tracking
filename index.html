@@ -12752,7 +12752,8 @@
       "folderId": "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ",
       "folderUrl": "https://drive.google.com/drive/folders/1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ",
       "folderName": "Attachments Files",
-      "uploadEndpoint": "https://script.google.com/macros/s/AKfycbzhIbrLVvD-Cwxh3wqEWqjSaIESGgXfhdJ2cWUhepiSIsAyG8yQafG392kkjnSvjT_N/exec"
+      "uploadEndpoint": "https://script.google.com/macros/s/AKfycbzhIbrLVvD-Cwxh3wqEWqjSaIESGgXfhdJ2cWUhepiSIsAyG8yQafG392kkjnSvjT_N/exec",
+      "accessToken": ""
 });
     const masterData = {
 	      departments: [
@@ -15260,6 +15261,19 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return trimmed;
     }
 
+    function configuredAttachmentAccessToken() {
+      return String(attachmentCloudConfig.accessToken || localStorage.getItem("contractTrackingAttachmentAccessToken") || "").trim();
+    }
+
+    function ensureAttachmentAccessToken() {
+      const saved = configuredAttachmentAccessToken();
+      if (saved) return saved;
+      const token = window.prompt("Paste Contract Tracking access token:");
+      const trimmed = String(token || "").trim();
+      if (trimmed) localStorage.setItem("contractTrackingAttachmentAccessToken", trimmed);
+      return trimmed;
+    }
+
     async function uploadQueuedAttachmentsToCloud() {
       if (!updateAttachmentQueue.length) return true;
       updateAttachmentQueue.forEach(item => {
@@ -15293,6 +15307,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         item.status = "Sending email";
       });
       renderUpdateAttachmentQueue();
+      const accessToken = ensureAttachmentAccessToken();
+      if (!accessToken) {
+        throw new Error("Missing Contract Tracking access token.");
+      }
       const response = await fetch(endpoint, {
         method: "POST",
         mode: "no-cors",
@@ -15300,6 +15318,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           mode: "sendStatusEmail",
+          accessToken,
           folderId: attachmentCloudConfig.folderId,
           folderUrl: attachmentCloudConfig.folderUrl,
           to: draft.to,
@@ -18095,9 +18114,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      return objectsToCsv(["Action", "Description / รายละเอียด", "Fixed SLA (Working Days)", "SLA Rule / วิธีนับ", "Action Data Version", "Active"], masterData.actionSla || []);
 	    }
 
-	    function driveDatabaseCsvPayload() {
+	    function driveDatabaseCsvPayload(accessToken) {
       return {
         mode: "saveDriveDatabase",
+        accessToken,
         standardSlaDataVersion,
         departmentDataVersion,
         actionDataVersion,
@@ -18203,6 +18223,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return;
+      const accessToken = ensureAttachmentAccessToken();
+      if (!accessToken) {
+        updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync needs access token`);
+        return;
+      }
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
         await fetch(endpoint, {
@@ -18210,7 +18235,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           mode: "no-cors",
           redirect: "follow",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(driveDatabaseCsvPayload())
+          body: JSON.stringify(driveDatabaseCsvPayload(accessToken))
         });
         updateDatabaseSyncStatus(`${contracts.length} contracts saved to Shared Drive`);
       } catch (error) {

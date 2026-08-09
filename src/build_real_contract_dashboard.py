@@ -31,6 +31,7 @@ ATTACHMENT_CLOUD_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ"
 ATTACHMENT_CLOUD_FOLDER_URL = f"https://drive.google.com/drive/folders/{ATTACHMENT_CLOUD_FOLDER_ID}"
 ATTACHMENT_CLOUD_FOLDER_NAME = "Attachments Files"
 ATTACHMENT_UPLOAD_ENDPOINT = "https://script.google.com/macros/s/AKfycbzhIbrLVvD-Cwxh3wqEWqjSaIESGgXfhdJ2cWUhepiSIsAyG8yQafG392kkjnSvjT_N/exec"
+ATTACHMENT_ACCESS_TOKEN = ""
 RESET_CONTRACT_AND_LOG_DATA = True
 ACTIVE_UPDATE_ACTIONS = ["Submit to Review", "Return", "Resubmit", "Forward"]
 STANDARD_SLA_DATA_VERSION = "2026-08-05-sla-config-updated1-v1"
@@ -1044,7 +1045,7 @@ def main():
         html,
         "    const contractInputCatalog = [",
         "\n    ];\n    const requestedRole",
-        f"    const contractInputCatalog = {js(contract_catalog)};\n    const contractTypeMasterV2 = Object.freeze({js(contract_type_master_v2_rows)});\n    const practicalExampleConfig = Object.freeze({js(PRACTICAL_EXAMPLE_CONFIG)});\n    const standardSlaDataVersion = {js(STANDARD_SLA_DATA_VERSION)};\n    const departmentDataVersion = {js(DEPARTMENT_DATA_VERSION)};\n    const actionDataVersion = {js(ACTION_DATA_VERSION)};\n    const actionDescriptionConfig = Object.freeze({js(ACTION_DESCRIPTION_CONFIG)});\n    const departmentNameAliases = Object.freeze({js(DEPARTMENT_NAME_ALIASES)});\n    const realWorkbookData = Object.freeze({js(workbook_data)});\n    const driveDatabaseConfig = Object.freeze({js({ 'folderId': DRIVE_FOLDER_ID, 'folderUrl': DRIVE_FOLDER_URL, 'contractsCsv': OUTPUT_CONTRACTS_CSV.name, 'logsCsv': OUTPUT_LOGS_CSV.name, 'typeMasterCsv': OUTPUT_TYPE_MASTER_CSV.name, 'departmentMasterCsv': OUTPUT_DEPARTMENT_MASTER_CSV.name, 'peopleMasterCsv': OUTPUT_PEOPLE_MASTER_CSV.name, 'contractTemplateCsv': OUTPUT_CONTRACT_TEMPLATE_CSV.name, 'actionSlaCsv': OUTPUT_ACTION_SLA_MASTER_CSV.name })});\n    const attachmentCloudConfig = Object.freeze({js({ 'folderId': ATTACHMENT_CLOUD_FOLDER_ID, 'folderUrl': ATTACHMENT_CLOUD_FOLDER_URL, 'folderName': ATTACHMENT_CLOUD_FOLDER_NAME, 'uploadEndpoint': ATTACHMENT_UPLOAD_ENDPOINT })});\n    const requestedRole",
+        f"    const contractInputCatalog = {js(contract_catalog)};\n    const contractTypeMasterV2 = Object.freeze({js(contract_type_master_v2_rows)});\n    const practicalExampleConfig = Object.freeze({js(PRACTICAL_EXAMPLE_CONFIG)});\n    const standardSlaDataVersion = {js(STANDARD_SLA_DATA_VERSION)};\n    const departmentDataVersion = {js(DEPARTMENT_DATA_VERSION)};\n    const actionDataVersion = {js(ACTION_DATA_VERSION)};\n    const actionDescriptionConfig = Object.freeze({js(ACTION_DESCRIPTION_CONFIG)});\n    const departmentNameAliases = Object.freeze({js(DEPARTMENT_NAME_ALIASES)});\n    const realWorkbookData = Object.freeze({js(workbook_data)});\n    const driveDatabaseConfig = Object.freeze({js({ 'folderId': DRIVE_FOLDER_ID, 'folderUrl': DRIVE_FOLDER_URL, 'contractsCsv': OUTPUT_CONTRACTS_CSV.name, 'logsCsv': OUTPUT_LOGS_CSV.name, 'typeMasterCsv': OUTPUT_TYPE_MASTER_CSV.name, 'departmentMasterCsv': OUTPUT_DEPARTMENT_MASTER_CSV.name, 'peopleMasterCsv': OUTPUT_PEOPLE_MASTER_CSV.name, 'contractTemplateCsv': OUTPUT_CONTRACT_TEMPLATE_CSV.name, 'actionSlaCsv': OUTPUT_ACTION_SLA_MASTER_CSV.name })});\n    const attachmentCloudConfig = Object.freeze({js({ 'folderId': ATTACHMENT_CLOUD_FOLDER_ID, 'folderUrl': ATTACHMENT_CLOUD_FOLDER_URL, 'folderName': ATTACHMENT_CLOUD_FOLDER_NAME, 'uploadEndpoint': ATTACHMENT_UPLOAD_ENDPOINT, 'accessToken': ATTACHMENT_ACCESS_TOKEN })});\n    const requestedRole",
     )
     html = html.replace(
         "    const requestedRole",
@@ -4457,6 +4458,7 @@ def main():
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           mode: "sendStatusEmail",
+          accessToken: attachmentCloudConfig.accessToken,
           folderId: attachmentCloudConfig.folderId,
           folderUrl: attachmentCloudConfig.folderUrl,
           to: draft.to,
@@ -5448,6 +5450,7 @@ def main():
 	    function driveDatabaseCsvPayload() {
       return {
         mode: "saveDriveDatabase",
+        accessToken: attachmentCloudConfig.accessToken,
         standardSlaDataVersion,
         departmentDataVersion,
         actionDataVersion,
@@ -8645,14 +8648,20 @@ def main():
 	    )
     OUTPUT_ATTACHMENT_APPS_SCRIPT.write_text(
         f"""const DEFAULT_FOLDER_ID = "{ATTACHMENT_CLOUD_FOLDER_ID}";
+const DEFAULT_DATABASE_FOLDER_ID = "{DRIVE_FOLDER_ID}";
+const DEFAULT_BACKUP_FOLDER_ID = "{DRIVE_FOLDER_ID}";
+const ACCESS_TOKEN_PROPERTY = "T23_CONTRACT_TRACKING_ACCESS_TOKEN";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {{
   try {{
     const payload = JSON.parse((e.postData && e.postData.contents) || "{{}}");
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
+    requireAccessToken_(payload);
     if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
+    if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
+    if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
     return jsonResponse({{ success: true, files: [saveAttachment_(payload)] }});
   }} catch (error) {{
     return jsonResponse({{ success: false, error: errorMessage_(error) }});
@@ -8667,7 +8676,10 @@ function doGet(e) {{
     return jsonpResponse({{
       success: true,
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
-      folderId: DEFAULT_FOLDER_ID
+      folderId: DEFAULT_FOLDER_ID,
+      databaseFolderId: DEFAULT_DATABASE_FOLDER_ID,
+      backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
+      writeRequestsRequireToken: true
     }}, callback);
   }} catch (error) {{
     return jsonpResponse({{ success: false, error: errorMessage_(error) }}, callback);
@@ -8710,10 +8722,84 @@ function saveDriveDatabase_(payload) {{
   }});
 }}
 
+function backupDriveDatabase_(payload) {{
+  const sourceFolder = DriveApp.getFolderById(payload.folderId || DEFAULT_DATABASE_FOLDER_ID);
+  const backupFolder = DriveApp.getFolderById(payload.backupFolderId || DEFAULT_BACKUP_FOLDER_ID);
+  const stamp = Utilities.formatDate(new Date(), "Etc/UTC", "yyyyMMdd-HHmmss");
+  const prefix = payload.prefix || "daily_backup";
+  const files = {{
+    contracts: backupTextFileByName_(sourceFolder, backupFolder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", stamp, prefix),
+    logs: backupTextFileByName_(sourceFolder, backupFolder, payload.logsCsv || "tracking_contracts_log_db.csv", stamp, prefix),
+    typeMaster: backupTextFileByName_(sourceFolder, backupFolder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", stamp, prefix),
+    departments: backupTextFileByName_(sourceFolder, backupFolder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", stamp, prefix),
+    people: backupTextFileByName_(sourceFolder, backupFolder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", stamp, prefix),
+    contractTemplates: backupTextFileByName_(sourceFolder, backupFolder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", stamp, prefix),
+    actionSla: backupTextFileByName_(sourceFolder, backupFolder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", stamp, prefix)
+  }};
+  return jsonResponse({{
+    success: true,
+    backedUp: true,
+    backedUpAt: new Date().toISOString(),
+    sourceFolderId: sourceFolder.getId(),
+    backupFolderId: backupFolder.getId(),
+    files: files
+  }});
+}}
+
+function runDailyBackup() {{
+  return backupDriveDatabase_({{
+    folderId: DEFAULT_DATABASE_FOLDER_ID,
+    backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
+    prefix: "daily_backup"
+  }});
+}}
+
+function installDailyBackupTrigger_() {{
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {{
+    if (trigger.getHandlerFunction && trigger.getHandlerFunction() === "runDailyBackup") {{
+      ScriptApp.deleteTrigger(trigger);
+    }}
+  }});
+  const trigger = ScriptApp.newTrigger("runDailyBackup")
+    .timeBased()
+    .everyDays(1)
+    .atHour(2)
+    .create();
+  return jsonResponse({{
+    success: true,
+    installed: true,
+    handlerFunction: trigger.getHandlerFunction(),
+    backupFolderId: DEFAULT_BACKUP_FOLDER_ID
+  }});
+}}
+
 function readTextFileByName_(folder, fileName) {{
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) return "";
   return files.next().getBlob().getDataAsString("UTF-8").replace(/^\\uFEFF/, "");
+}}
+
+function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, prefix) {{
+  const name = cleanFileName_(fileName || "database.csv");
+  const files = sourceFolder.getFilesByName(name);
+  if (!files.hasNext()) {{
+    return {{
+      sourceName: name,
+      skipped: true,
+      reason: "Source file not found"
+    }};
+  }}
+  const sourceFile = files.next();
+  const backupName = cleanFileName_([prefix, stamp, name].join("_"));
+  const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
+  backupFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {{
+    id: backupFile.getId(),
+    sourceName: name,
+    name: backupFile.getName(),
+    url: backupFile.getUrl(),
+    downloadUrl: "https://drive.google.com/uc?export=download&id=" + backupFile.getId()
+  }};
 }}
 
 function upsertTextFileByName_(folder, fileName, text) {{
@@ -8895,6 +8981,16 @@ function reusableDriveFileUrl_(url) {{
   if (/^https:\\/\\/drive\\.google\\.com\\/uc\\?/.test(text)) return text;
   if (/^https:\\/\\/docs\\.google\\.com\\//.test(text)) return text;
   return "";
+}}
+
+function requireAccessToken_(payload) {{
+  const expectedToken = PropertiesService.getScriptProperties().getProperty(ACCESS_TOKEN_PROPERTY);
+  if (!expectedToken) {{
+    throw new Error("Server access token is not configured.");
+  }}
+  if (String(payload && payload.accessToken || "") !== expectedToken) {{
+    throw new Error("Unauthorized request.");
+  }}
 }}
 
 function errorMessage_(error) {{

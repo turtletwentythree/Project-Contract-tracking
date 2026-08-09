@@ -1,12 +1,18 @@
 const DEFAULT_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ";
+const DEFAULT_DATABASE_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
+const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
+const ACCESS_TOKEN_PROPERTY = "T23_CONTRACT_TRACKING_ACCESS_TOKEN";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {
   try {
     const payload = JSON.parse((e.postData && e.postData.contents) || "{}");
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
+    requireAccessToken_(payload);
     if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
+    if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
+    if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
     return jsonResponse({ success: true, files: [saveAttachment_(payload)] });
   } catch (error) {
     return jsonResponse({ success: false, error: errorMessage_(error) });
@@ -21,7 +27,10 @@ function doGet(e) {
     return jsonpResponse({
       success: true,
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
-      folderId: DEFAULT_FOLDER_ID
+      folderId: DEFAULT_FOLDER_ID,
+      databaseFolderId: DEFAULT_DATABASE_FOLDER_ID,
+      backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
+      writeRequestsRequireToken: true
     }, callback);
   } catch (error) {
     return jsonpResponse({ success: false, error: errorMessage_(error) }, callback);
@@ -64,10 +73,84 @@ function saveDriveDatabase_(payload) {
   });
 }
 
+function backupDriveDatabase_(payload) {
+  const sourceFolder = DriveApp.getFolderById(payload.folderId || DEFAULT_DATABASE_FOLDER_ID);
+  const backupFolder = DriveApp.getFolderById(payload.backupFolderId || DEFAULT_BACKUP_FOLDER_ID);
+  const stamp = Utilities.formatDate(new Date(), "Etc/UTC", "yyyyMMdd-HHmmss");
+  const prefix = payload.prefix || "daily_backup";
+  const files = {
+    contracts: backupTextFileByName_(sourceFolder, backupFolder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", stamp, prefix),
+    logs: backupTextFileByName_(sourceFolder, backupFolder, payload.logsCsv || "tracking_contracts_log_db.csv", stamp, prefix),
+    typeMaster: backupTextFileByName_(sourceFolder, backupFolder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", stamp, prefix),
+    departments: backupTextFileByName_(sourceFolder, backupFolder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", stamp, prefix),
+    people: backupTextFileByName_(sourceFolder, backupFolder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", stamp, prefix),
+    contractTemplates: backupTextFileByName_(sourceFolder, backupFolder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", stamp, prefix),
+    actionSla: backupTextFileByName_(sourceFolder, backupFolder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", stamp, prefix)
+  };
+  return jsonResponse({
+    success: true,
+    backedUp: true,
+    backedUpAt: new Date().toISOString(),
+    sourceFolderId: sourceFolder.getId(),
+    backupFolderId: backupFolder.getId(),
+    files: files
+  });
+}
+
+function runDailyBackup() {
+  return backupDriveDatabase_({
+    folderId: DEFAULT_DATABASE_FOLDER_ID,
+    backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
+    prefix: "daily_backup"
+  });
+}
+
+function installDailyBackupTrigger_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction && trigger.getHandlerFunction() === "runDailyBackup") {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  const trigger = ScriptApp.newTrigger("runDailyBackup")
+    .timeBased()
+    .everyDays(1)
+    .atHour(2)
+    .create();
+  return jsonResponse({
+    success: true,
+    installed: true,
+    handlerFunction: trigger.getHandlerFunction(),
+    backupFolderId: DEFAULT_BACKUP_FOLDER_ID
+  });
+}
+
 function readTextFileByName_(folder, fileName) {
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) return "";
   return files.next().getBlob().getDataAsString("UTF-8").replace(/^\uFEFF/, "");
+}
+
+function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, prefix) {
+  const name = cleanFileName_(fileName || "database.csv");
+  const files = sourceFolder.getFilesByName(name);
+  if (!files.hasNext()) {
+    return {
+      sourceName: name,
+      skipped: true,
+      reason: "Source file not found"
+    };
+  }
+  const sourceFile = files.next();
+  const backupName = cleanFileName_([prefix, stamp, name].join("_"));
+  const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
+  backupFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {
+    id: backupFile.getId(),
+    sourceName: name,
+    name: backupFile.getName(),
+    url: backupFile.getUrl(),
+    downloadUrl: "https://drive.google.com/uc?export=download&id=" + backupFile.getId()
+  };
 }
 
 function upsertTextFileByName_(folder, fileName, text) {
@@ -249,6 +332,16 @@ function reusableDriveFileUrl_(url) {
   if (/^https:\/\/drive\.google\.com\/uc\?/.test(text)) return text;
   if (/^https:\/\/docs\.google\.com\//.test(text)) return text;
   return "";
+}
+
+function requireAccessToken_(payload) {
+  const expectedToken = PropertiesService.getScriptProperties().getProperty(ACCESS_TOKEN_PROPERTY);
+  if (!expectedToken) {
+    throw new Error("Server access token is not configured.");
+  }
+  if (String(payload && payload.accessToken || "") !== expectedToken) {
+    throw new Error("Unauthorized request.");
+  }
 }
 
 function errorMessage_(error) {
