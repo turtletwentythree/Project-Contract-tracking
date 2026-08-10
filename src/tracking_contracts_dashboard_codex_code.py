@@ -6991,7 +6991,7 @@ def main():
     const demoAccountConfig = Object.freeze({
       viewer: { role: "viewer", passwordHash: "9f9f20ec6958d3c176c17ea3eb9731b053b6fc753367e3c25e3fb2578ec0f4e6" },
       user: { role: "user", passwordHash: "cc66576333f36fb04050e842039951ddbdb54b5dcca031a5eb5861fa1e1a1f09" },
-      confidential: { role: "confidential", passwordHash: "eb44db23e31fa6df080d8cb73efb730478abafd2724781d1199d2fb090f3b293" },
+      confidential: { role: "confidential", passwordHash: "7e7f06d4dccf2376e8774a707806817c9fe7079979ddc6e74c088d7a57afa08b" },
       admin: { role: "admin", passwordHash: "fb07d63fb5ae1ee60f5f96592cb25a99ed421f4e32969d347af615bf62c5e5b3" }
     });
     let currentUser = null;
@@ -7995,6 +7995,9 @@ def main():
     const defaultPasswordHashes = Object.freeze(Object.fromEntries(
       Object.entries(demoAccountConfig).map(([username, account]) => [username, account.passwordHash])
     ));
+    const deprecatedConfidentialPasswordHashes = Object.freeze([
+      "eb44db23e31fa6df080d8cb73efb730478abafd2724781d1199d2fb090f3b293"
+    ]);
 
     function defaultAdministrativeSecurityState() {
       return {
@@ -8013,11 +8016,15 @@ def main():
         if (!parsed || typeof parsed !== "object") return fallback;
         Object.keys(fallback.accounts).forEach(username => {
           const saved = parsed.accounts?.[username] || {};
+          const savedPasswordHash = String(saved.passwordHash || defaultPasswordHashes[username]);
+          const migratedPasswordHash = username === "confidential" && deprecatedConfidentialPasswordHashes.includes(savedPasswordHash)
+            ? defaultPasswordHashes[username]
+            : savedPasswordHash;
           fallback.accounts[username] = {
-            passwordHash: String(saved.passwordHash || defaultPasswordHashes[username]),
+            passwordHash: migratedPasswordHash,
             passwordHashHistory: Array.isArray(saved.passwordHashHistory)
-              ? saved.passwordHashHistory.map(String).filter(Boolean).slice(0, 5)
-              : [String(saved.passwordHash || defaultPasswordHashes[username])],
+              ? [migratedPasswordHash, ...saved.passwordHashHistory.map(String).filter(Boolean)].filter((value, index, rows) => rows.indexOf(value) === index).slice(0, 5)
+              : [migratedPasswordHash],
             failedAttempts: Number(saved.failedAttempts || 0),
             locked: Boolean(saved.locked)
           };
