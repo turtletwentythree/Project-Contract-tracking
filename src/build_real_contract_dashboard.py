@@ -2981,6 +2981,13 @@ def main():
         """        vendor: String(form.get("vendor") || selectedAddTemplate?.vendor || "").trim(),""",
     )
     html = html.replace(
+        """        station: `From ${owner} >> To ${to}`,
+        due: finalDue,""",
+        """        station: `From ${owner} >> To ${to}`,
+        addCaseDate: lockedInDate,
+        due: finalDue,""",
+    )
+    html = html.replace(
         """      attachEditableDropdown("addOwner", ownerDropdownOptions, syncAddCaseSystemFields);
       attachEditableDropdown("updateTo", () => directoryEmployeeOptions(), () => syncUpdateRecipientEmail(true));""",
         """      attachEditableDropdown("addOwner", ownerDropdownOptions, syncAddCaseSystemFields);
@@ -3045,7 +3052,7 @@ def main():
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Contract Name</th><th>Department / Restaurant</th><th>Contract Owner</th><th>Type of Contract</th><th>Stage</th><th>Status Update</th><th>Station Owner</th><th>Due Date</th><th></th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Contract Name</th><th>Department / Restaurant</th><th>Contract Owner</th><th>Type of Contract</th><th>Stage</th><th>Status Update</th><th>Station Owner</th><th>Add Case Date</th><th>Due Date</th><th></th></tr></thead>
                     <tbody id="masterContractRows"></tbody>
                   </table>
                 </div>
@@ -5070,6 +5077,51 @@ def main():
     initializeStatusEmailCcControl();""",
     )
     html = html.replace(
+        """    function latestLogFor(contractId) {
+      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
+    }""",
+        """    function latestLogFor(contractId) {
+      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
+    }
+
+    function firstLogFor(contractId) {
+      return logRecords.find(row => row[0] === contractId) || null;
+    }
+
+    function addCaseStartDateForContract(contract) {
+      if (!contract) return "";
+      return dateToInputValue(contract.addCaseDate || firstLogFor(contract.id)?.[6] || "");
+    }
+
+    function recalculateLogTiming(row) {
+      if (!Array.isArray(row)) return row;
+      row[9] = calculateDaysOnHand(row[6], row[7]);
+      row[10] = calculateAlert(row[12], row[9], row[8]);
+      return row;
+    }
+
+    function syncContractTimingFromLogs(contract) {
+      if (!contract) return contract;
+      const rows = logRecords.filter(row => row[0] === contract.id);
+      rows.forEach(recalculateLogTiming);
+      const latest = rows.slice(-1)[0] || null;
+      const totalSla = Number(contract.totalSla || totalSlaFor(contract.workType || contract.type)) || 0;
+      const used = rows.reduce((sum, row) => sum + (Number(row[9]) || 0), 0);
+      const startDate = addCaseStartDateForContract(contract);
+      contract.addCaseDate = startDate;
+      contract.totalSla = totalSla;
+      contract.used = used;
+      contract.days = latest ? Number(latest[9]) || 0 : used;
+      contract.balance = totalSla - used;
+      contract.systemDue = startDate ? addBusinessDays(startDate, totalSla) : (contract.systemDue || "");
+      if (!contract.due) contract.due = contract.systemDue;
+      contract.alert = latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla);
+      contract.status = calculateContractStatus(contract.stage, used, totalSla);
+      return contract;
+    }""",
+        1,
+    )
+    html = html.replace(
         """    function renderAll() {
       rebuildNotificationQueue();""",
         """    const contractDatabaseHeaders = [
@@ -5085,6 +5137,7 @@ def main():
       "Status Update",
       "Station",
       "Station Owner",
+      "Add Case Date",
       "Due Date",
       "System Due Date",
       "Work Type",
@@ -5215,6 +5268,7 @@ def main():
         "Status Update": item.status,
         "Station": item.station,
         "Station Owner": station.to,
+        "Add Case Date": item.addCaseDate || firstLogFor(item.id)?.[6] || "",
         "Due Date": item.due,
         "System Due Date": item.systemDue || "",
         "Work Type": item.workType,
@@ -5251,6 +5305,7 @@ def main():
         returns: Number(row["Returns"] || 0) || 0,
         status: String(row["Status Update"] || row["Alert"] || "Green >>G=On Track").trim(),
         station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),
+        addCaseDate: String(row["Add Case Date"] || "").trim(),
         due: String(row["Due Date"] || "").trim(),
         systemDue: String(row["System Due Date"] || "").trim(),
         workType: String(row["Work Type"] || type || "Other").trim(),
@@ -5606,7 +5661,7 @@ def main():
               station: contract.station,
               from: stationParts(contract.station).from || contract.owner,
               to: stationParts(contract.station).to || "Legal",
-              inDate: todayInputValue(),
+              inDate: contract.addCaseDate || todayInputValue(),
               outDate: "",
               sla: contract.totalSla || totalSlaFor(contract.workType),
               delayReason: "",
@@ -5661,6 +5716,7 @@ def main():
             <td>${masterInput("stage", contract.stage)}</td>
             <td>${masterInput("status", contract.status)}</td>
             <td>${masterInput("stationOwner", stationOwnerForMasterContract(contract))}</td>
+            <td>${masterInput("addCaseDate", addCaseStartDateForContract(contract), { type: "date" })}</td>
             <td>${masterInput("due", contract.due, { type: "date" })}</td>
             <td>${masterDeleteButton()}</td>
           </tr>`).join("");
@@ -5756,10 +5812,11 @@ def main():
     function normalizeMasterDataFromUi() {
       if (!requireSystemAdministrator()) return false;
       const originalContracts = new Map(contracts.map(contract => [String(contract.id || "").trim(), contract]));
-      const contractRows = readMasterRows("#masterContractRows", ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "due"], "_originalId");
+      const contractRows = readMasterRows("#masterContractRows", ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "addCaseDate", "due"], "_originalId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
+      const addCaseDateMap = new Map();
       let hasContractError = false;
 
       contractRows.forEach(row => {
@@ -5782,6 +5839,8 @@ def main():
         const totalSla = Number(original.totalSla || totalSlaFor(type)) || 0;
         const used = Number(original.used || original.days || 0) || 0;
         const accessLevel = String(original.accessLevel || accessLevelForContractType(type) || "Normal").trim();
+        const addCaseDate = dateToInputValue(row.addCaseDate || original.addCaseDate || firstLogFor(originalId)?.[6] || firstLogFor(id)?.[6] || "");
+        addCaseDateMap.set(id, addCaseDate);
         nextContracts.push({
           ...original,
           id,
@@ -5793,6 +5852,7 @@ def main():
           stage: String(row.stage || original.stage || "Draft Created").trim(),
           status: String(row.status || original.status || original.alert || "Green >>G=On Track").trim(),
           station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,
+          addCaseDate,
           due: String(row.due || original.due || "").trim(),
           workType: String(original.workType || type || "Other").trim(),
           totalSla,
@@ -5819,6 +5879,12 @@ def main():
           return row;
         })
         .filter(row => keptIds.has(row?.[0])));
+      logRecords.forEach(row => {
+        const addCaseDate = addCaseDateMap.get(row?.[0]);
+        if (addCaseDate && Number(row?.[1] || 0) === 1) row[6] = addCaseDate;
+        recalculateLogTiming(row);
+      });
+      contracts.forEach(syncContractTimingFromLogs);
       refreshDashboardDataFromContracts();
 
 	      masterData.departments = readMasterRows("#masterDepartmentRows", ["Department / Restaurant", "Department Code", "Active"], "Department / Restaurant")
