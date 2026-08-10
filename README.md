@@ -21,19 +21,13 @@ The dashboard uses browser local storage for local contract data changes and the
 
 ## Production Operations
 
-After changing `src/attachment_upload_apps_script.js`, update the deployed Google Apps Script Web App with the same source and redeploy it. The current Apps Script source requires an `accessToken` for write actions such as saving CSV data, uploading attachments, sending status email, and installing backup triggers.
-
-Set the real token in Apps Script under Project Settings > Script properties:
-
-- Property: `T23_CONTRACT_TRACKING_ACCESS_TOKEN`
-- Value: a private token shared only with approved users
+After changing `src/attachment_upload_apps_script.js`, update the deployed Google Apps Script Web App with the same source and redeploy it.
 
 To enable daily backup after redeploying Apps Script, send a POST request to the Web App with:
 
 ```json
 {
-  "mode": "installDailyBackup",
-  "accessToken": "the private token from Script properties"
+  "mode": "installDailyBackup"
 }
 ```
 

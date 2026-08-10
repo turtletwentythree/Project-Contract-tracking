@@ -1,14 +1,12 @@
 const DEFAULT_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ";
 const DEFAULT_DATABASE_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
-const ACCESS_TOKEN_PROPERTY = "T23_CONTRACT_TRACKING_ACCESS_TOKEN";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {
   try {
     const payload = JSON.parse((e.postData && e.postData.contents) || "{}");
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
-    requireAccessToken_(payload);
     if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
@@ -29,8 +27,7 @@ function doGet(e) {
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
       folderId: DEFAULT_FOLDER_ID,
       databaseFolderId: DEFAULT_DATABASE_FOLDER_ID,
-      backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
-      writeRequestsRequireToken: true
+      backupFolderId: DEFAULT_BACKUP_FOLDER_ID
     }, callback);
   } catch (error) {
     return jsonpResponse({ success: false, error: errorMessage_(error) }, callback);
@@ -332,16 +329,6 @@ function reusableDriveFileUrl_(url) {
   if (/^https:\/\/drive\.google\.com\/uc\?/.test(text)) return text;
   if (/^https:\/\/docs\.google\.com\//.test(text)) return text;
   return "";
-}
-
-function requireAccessToken_(payload) {
-  const expectedToken = PropertiesService.getScriptProperties().getProperty(ACCESS_TOKEN_PROPERTY);
-  if (!expectedToken) {
-    throw new Error("Server access token is not configured.");
-  }
-  if (String(payload && payload.accessToken || "") !== expectedToken) {
-    throw new Error("Unauthorized request.");
-  }
 }
 
 function errorMessage_(error) {

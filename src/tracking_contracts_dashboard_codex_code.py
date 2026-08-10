@@ -31,7 +31,6 @@ ATTACHMENT_CLOUD_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ"
 ATTACHMENT_CLOUD_FOLDER_URL = f"https://drive.google.com/drive/folders/{ATTACHMENT_CLOUD_FOLDER_ID}"
 ATTACHMENT_CLOUD_FOLDER_NAME = "Attachments Files"
 ATTACHMENT_UPLOAD_ENDPOINT = "https://script.google.com/macros/s/AKfycbzhIbrLVvD-Cwxh3wqEWqjSaIESGgXfhdJ2cWUhepiSIsAyG8yQafG392kkjnSvjT_N/exec"
-ATTACHMENT_ACCESS_TOKEN = ""
 RESET_CONTRACT_AND_LOG_DATA = True
 ACTIVE_UPDATE_ACTIONS = ["Submit to Review", "Return", "Resubmit", "Forward"]
 STANDARD_SLA_DATA_VERSION = "2026-08-05-sla-config-updated1-v1"
@@ -1045,7 +1044,7 @@ def main():
         html,
         "    const contractInputCatalog = [",
         "\n    ];\n    const requestedRole",
-        f"    const contractInputCatalog = {js(contract_catalog)};\n    const contractTypeMasterV2 = Object.freeze({js(contract_type_master_v2_rows)});\n    const practicalExampleConfig = Object.freeze({js(PRACTICAL_EXAMPLE_CONFIG)});\n    const standardSlaDataVersion = {js(STANDARD_SLA_DATA_VERSION)};\n    const departmentDataVersion = {js(DEPARTMENT_DATA_VERSION)};\n    const actionDataVersion = {js(ACTION_DATA_VERSION)};\n    const actionDescriptionConfig = Object.freeze({js(ACTION_DESCRIPTION_CONFIG)});\n    const departmentNameAliases = Object.freeze({js(DEPARTMENT_NAME_ALIASES)});\n    const realWorkbookData = Object.freeze({js(workbook_data)});\n    const driveDatabaseConfig = Object.freeze({js({ 'folderId': DRIVE_FOLDER_ID, 'folderUrl': DRIVE_FOLDER_URL, 'contractsCsv': OUTPUT_CONTRACTS_CSV.name, 'logsCsv': OUTPUT_LOGS_CSV.name, 'typeMasterCsv': OUTPUT_TYPE_MASTER_CSV.name, 'departmentMasterCsv': OUTPUT_DEPARTMENT_MASTER_CSV.name, 'peopleMasterCsv': OUTPUT_PEOPLE_MASTER_CSV.name, 'contractTemplateCsv': OUTPUT_CONTRACT_TEMPLATE_CSV.name, 'actionSlaCsv': OUTPUT_ACTION_SLA_MASTER_CSV.name })});\n    const attachmentCloudConfig = Object.freeze({js({ 'folderId': ATTACHMENT_CLOUD_FOLDER_ID, 'folderUrl': ATTACHMENT_CLOUD_FOLDER_URL, 'folderName': ATTACHMENT_CLOUD_FOLDER_NAME, 'uploadEndpoint': ATTACHMENT_UPLOAD_ENDPOINT, 'accessToken': ATTACHMENT_ACCESS_TOKEN })});\n    const requestedRole",
+        f"    const contractInputCatalog = {js(contract_catalog)};\n    const contractTypeMasterV2 = Object.freeze({js(contract_type_master_v2_rows)});\n    const practicalExampleConfig = Object.freeze({js(PRACTICAL_EXAMPLE_CONFIG)});\n    const standardSlaDataVersion = {js(STANDARD_SLA_DATA_VERSION)};\n    const departmentDataVersion = {js(DEPARTMENT_DATA_VERSION)};\n    const actionDataVersion = {js(ACTION_DATA_VERSION)};\n    const actionDescriptionConfig = Object.freeze({js(ACTION_DESCRIPTION_CONFIG)});\n    const departmentNameAliases = Object.freeze({js(DEPARTMENT_NAME_ALIASES)});\n    const realWorkbookData = Object.freeze({js(workbook_data)});\n    const driveDatabaseConfig = Object.freeze({js({ 'folderId': DRIVE_FOLDER_ID, 'folderUrl': DRIVE_FOLDER_URL, 'contractsCsv': OUTPUT_CONTRACTS_CSV.name, 'logsCsv': OUTPUT_LOGS_CSV.name, 'typeMasterCsv': OUTPUT_TYPE_MASTER_CSV.name, 'departmentMasterCsv': OUTPUT_DEPARTMENT_MASTER_CSV.name, 'peopleMasterCsv': OUTPUT_PEOPLE_MASTER_CSV.name, 'contractTemplateCsv': OUTPUT_CONTRACT_TEMPLATE_CSV.name, 'actionSlaCsv': OUTPUT_ACTION_SLA_MASTER_CSV.name })});\n    const attachmentCloudConfig = Object.freeze({js({ 'folderId': ATTACHMENT_CLOUD_FOLDER_ID, 'folderUrl': ATTACHMENT_CLOUD_FOLDER_URL, 'folderName': ATTACHMENT_CLOUD_FOLDER_NAME, 'uploadEndpoint': ATTACHMENT_UPLOAD_ENDPOINT })});\n    const requestedRole",
     )
     html = html.replace(
         "    const requestedRole",
@@ -4458,7 +4457,6 @@ def main():
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           mode: "sendStatusEmail",
-          accessToken: attachmentCloudConfig.accessToken,
           folderId: attachmentCloudConfig.folderId,
           folderUrl: attachmentCloudConfig.folderUrl,
           to: draft.to,
@@ -5450,7 +5448,6 @@ def main():
 	    function driveDatabaseCsvPayload() {
       return {
         mode: "saveDriveDatabase",
-        accessToken: attachmentCloudConfig.accessToken,
         standardSlaDataVersion,
         departmentDataVersion,
         actionDataVersion,
@@ -8657,14 +8654,12 @@ def main():
         f"""const DEFAULT_FOLDER_ID = "{ATTACHMENT_CLOUD_FOLDER_ID}";
 const DEFAULT_DATABASE_FOLDER_ID = "{DRIVE_FOLDER_ID}";
 const DEFAULT_BACKUP_FOLDER_ID = "{DRIVE_FOLDER_ID}";
-const ACCESS_TOKEN_PROPERTY = "T23_CONTRACT_TRACKING_ACCESS_TOKEN";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {{
   try {{
     const payload = JSON.parse((e.postData && e.postData.contents) || "{{}}");
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
-    requireAccessToken_(payload);
     if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
@@ -8685,8 +8680,7 @@ function doGet(e) {{
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
       folderId: DEFAULT_FOLDER_ID,
       databaseFolderId: DEFAULT_DATABASE_FOLDER_ID,
-      backupFolderId: DEFAULT_BACKUP_FOLDER_ID,
-      writeRequestsRequireToken: true
+      backupFolderId: DEFAULT_BACKUP_FOLDER_ID
     }}, callback);
   }} catch (error) {{
     return jsonpResponse({{ success: false, error: errorMessage_(error) }}, callback);
@@ -8988,16 +8982,6 @@ function reusableDriveFileUrl_(url) {{
   if (/^https:\\/\\/drive\\.google\\.com\\/uc\\?/.test(text)) return text;
   if (/^https:\\/\\/docs\\.google\\.com\\//.test(text)) return text;
   return "";
-}}
-
-function requireAccessToken_(payload) {{
-  const expectedToken = PropertiesService.getScriptProperties().getProperty(ACCESS_TOKEN_PROPERTY);
-  if (!expectedToken) {{
-    throw new Error("Server access token is not configured.");
-  }}
-  if (String(payload && payload.accessToken || "") !== expectedToken) {{
-    throw new Error("Unauthorized request.");
-  }}
 }}
 
 function errorMessage_(error) {{
