@@ -7456,8 +7456,8 @@
                     <small>Edit or delete incorrect cases created from Add Case</small>
                   </div>
                   <div class="master-data-actions">
-                    <button class="secondary-button" type="button" id="importMasterContractsBtn">Import Data</button>
-                    <input type="file" id="importContractsCsv" accept=".csv,text/csv" hidden>
+                    <button class="secondary-button" type="button" id="importMasterContractsBtn" data-master-import="contractsNormal">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="contractsNormal">Export</button>
                   </div>
                 </div>
                 <div class="table-wrap">
@@ -7474,6 +7474,10 @@
                     <h2>Confidential Contract Status</h2>
                     <small>Edit or delete incorrect created from.</small>
                   </div>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" data-master-import="contractsConfidential">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="contractsConfidential">Export</button>
+                  </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -7488,6 +7492,10 @@
                   <div>
                     <h2>Log Records</h2>
                     <small>Edit or delete incorrect created from Log View Detail.</small>
+                  </div>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" data-master-import="logs">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="logs">Export</button>
                   </div>
                 </div>
                 <div class="table-wrap">
@@ -7504,7 +7512,11 @@
                     <h2>Department Master</h2>
                     <small>Add, edit, or delete Department rows</small>
                   </div>
-                  <button class="secondary-button" type="button" data-add-master-row="departments">Add Row</button>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" data-master-import="departments">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="departments">Export</button>
+                    <button class="secondary-button" type="button" data-add-master-row="departments">Add Row</button>
+                  </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -7520,7 +7532,11 @@
                     <h2>People / Owner Master</h2>
                     <small>Add, edit, or delete Owner rows used by To, CC and email lookup</small>
                   </div>
-                  <button class="secondary-button" type="button" data-add-master-row="people">Add Row</button>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" data-master-import="people">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="people">Export</button>
+                    <button class="secondary-button" type="button" data-add-master-row="people">Add Row</button>
+                  </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -7536,7 +7552,11 @@
                     <h2>Type of Contract Master</h2>
 	                    <small>Add, edit, or delete Type/Sub Type rows used by dropdown, tooltip and Total SLA</small>
 	                  </div>
-                  <button class="secondary-button" type="button" data-add-master-row="contractTypes">Add Row</button>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" data-master-import="contractTypes">Import</button>
+                    <button class="secondary-button" type="button" data-master-export="contractTypes">Export</button>
+                    <button class="secondary-button" type="button" data-add-master-row="contractTypes">Add Row</button>
+                  </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -7552,7 +7572,11 @@
 	                    <h2>Action SLA Master</h2>
 	                    <small>Add, edit, or delete Action SLA rows included in Total SLA</small>
 	                  </div>
-	                  <button class="secondary-button" type="button" data-add-master-row="actionSla">Add Row</button>
+	                  <div class="master-data-actions">
+	                    <button class="secondary-button" type="button" data-master-import="actionSla">Import</button>
+	                    <button class="secondary-button" type="button" data-master-export="actionSla">Export</button>
+	                    <button class="secondary-button" type="button" data-add-master-row="actionSla">Add Row</button>
+	                  </div>
 	                </div>
 	                <div class="table-wrap">
 	                  <table class="master-table">
@@ -18366,6 +18390,212 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       reader.readAsText(file, "utf-8");
     }
 
+    const masterImportExportLabels = Object.freeze({
+      contractsNormal: "Contract Records",
+      contractsConfidential: "Confidential Contract Status",
+      logs: "Log Records",
+      departments: "Department Master",
+      people: "People / Owner Master",
+      contractTypes: "Type of Contract Master",
+      actionSla: "Action SLA Master"
+    });
+
+    function upsertRowsByKey(targetRows, incomingRows, keyFn) {
+      const indexes = new Map();
+      targetRows.forEach((row, index) => {
+        const key = keyFn(row);
+        if (key) indexes.set(key, index);
+      });
+      let added = 0;
+      let updated = 0;
+      incomingRows.forEach(row => {
+        const key = keyFn(row);
+        if (!key) return;
+        if (indexes.has(key)) {
+          targetRows[indexes.get(key)] = { ...targetRows[indexes.get(key)], ...row };
+          updated += 1;
+        } else {
+          indexes.set(key, targetRows.length);
+          targetRows.push(row);
+          added += 1;
+        }
+      });
+      return { added, updated };
+    }
+
+    function masterExportPayload(kind) {
+      if (kind === "contractsNormal") {
+        return {
+          filename: "master_contract_records.csv",
+          headers: contractDatabaseHeaders,
+          rows: contracts.filter(contract => !isConfidentialContract(contract)).map(contractDbRow)
+        };
+      }
+      if (kind === "contractsConfidential") {
+        return {
+          filename: "master_confidential_contract_status.csv",
+          headers: contractDatabaseHeaders,
+          rows: contracts.filter(isConfidentialContract).map(contractDbRow)
+        };
+      }
+      if (kind === "logs") {
+        return { filename: "master_log_records.csv", headers: logDatabaseHeaders, rows: logRecords.map(logDbRow) };
+      }
+      if (kind === "departments") {
+        return { filename: "master_department_rows.csv", headers: ["Department / Restaurant", "Department Code", "Department Data Version", "Active"], rows: masterData.departments || [] };
+      }
+      if (kind === "people") {
+        return { filename: "master_people_owner_rows.csv", headers: ["company", "department", "name", "email", "active"], rows: masterData.people || [] };
+      }
+      if (kind === "contractTypes") {
+        return { filename: "master_type_of_contract_rows.csv", headers: ["Contract Classification", "Type of Contract", "Sub Type of Contract", "Fixed SLA (Working Days)", "Standard SLA Version", "Active", "Category", "Description / คำอธิบาย"], rows: masterData.contractTypes || [] };
+      }
+      if (kind === "actionSla") {
+        return { filename: "master_action_sla_rows.csv", headers: ["Action", "Description / รายละเอียด", "Fixed SLA (Working Days)", "SLA Rule / วิธีนับ", "Action Data Version", "Active"], rows: masterData.actionSla || [] };
+      }
+      return null;
+    }
+
+    function exportMasterDataTable(kind) {
+      if (!requireSystemAdministrator()) return;
+      if (!normalizeMasterDataFromUi()) return;
+      const payload = masterExportPayload(kind);
+      if (!payload) return;
+      downloadTextFile(payload.filename, objectsToCsv(payload.headers, payload.rows));
+      showToast(`${masterImportExportLabels[kind] || "Master Data"} exported`);
+    }
+
+    function upsertImportedContracts(importedContracts, accessLevel) {
+      migrateContractIdsToDepartmentFormat(importedContracts, []);
+      const existingById = new Map(contracts.map((contract, index) => [contract.id, index]));
+      let added = 0;
+      let updated = 0;
+      importedContracts.forEach(contract => {
+        contract.accessLevel = accessLevel;
+        contract.visibility = accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป";
+        contract.category = accessLevel === "Confidential" ? "Confidential" : (contract.category || contractTypeCategoryFor(contract.type));
+        const existingIndex = existingById.get(contract.id);
+        if (existingIndex >= 0) {
+          contracts[existingIndex] = { ...contracts[existingIndex], ...contract };
+          updated += 1;
+        } else {
+          existingById.set(contract.id, contracts.length);
+          contracts.push(contract);
+          added += 1;
+        }
+        if (!latestLogFor(contract.id)) {
+          addLogRecord({
+            contractId: contract.id,
+            cycle: contract.cycle || 1,
+            station: contract.station,
+            from: stationParts(contract.station).from || contract.owner,
+            to: stationParts(contract.station).to || "Legal",
+            inDate: contract.addCaseDate || todayInputValue(),
+            outDate: "",
+            sla: contract.totalSla || totalSlaFor(contract.workType || contract.type),
+            delayReason: "",
+            action: contract.stage || "Draft Created",
+            updatedBy: "Master Import"
+          });
+        }
+      });
+      return { added, updated };
+    }
+
+    async function applyMasterImportRows(kind, rows) {
+      let result = { added: 0, updated: 0 };
+      if (kind === "contractsNormal" || kind === "contractsConfidential") {
+        const accessLevel = kind === "contractsConfidential" ? "Confidential" : "Normal";
+        const importedContracts = rows.map(contractFromDbRow).filter(item => item.id && item.name);
+        if (!importedContracts.length) return null;
+        result = upsertImportedContracts(importedContracts, accessLevel);
+      } else if (kind === "logs") {
+        const importedLogs = rows.map(logFromDbRow).filter(row => String(row?.[0] || "").trim() && String(row?.[1] || "").trim());
+        if (!importedLogs.length) return null;
+        const existingByKey = new Map(logRecords.map((row, index) => [`${row[0]}::${row[1]}`, index]));
+        importedLogs.forEach(row => {
+          row[1] = Number(row[1]) || row[1];
+          row[2] = Number(row[2]) || row[2] || 1;
+          row[8] = Number(row[8]) || 0;
+          recalculateLogTiming(row);
+          const key = `${row[0]}::${row[1]}`;
+          if (existingByKey.has(key)) {
+            logRecords[existingByKey.get(key)] = row;
+            result.updated += 1;
+          } else {
+            existingByKey.set(key, logRecords.length);
+            logRecords.push(row);
+            result.added += 1;
+          }
+        });
+      } else if (kind === "departments") {
+        const imported = rows.map(row => {
+          const department = canonicalDepartmentName(row["Department / Restaurant"]);
+          const code = String(row["Department Code"] || departmentCodeSuggestion(department) || "").trim().toUpperCase();
+          return { ...row, "Department / Restaurant": department, "Department Code": code, "Department Data Version": row["Department Data Version"] || departmentDataVersion, Active: row.Active || "Yes" };
+        }).filter(row => row["Department / Restaurant"] && row["Department Code"]);
+        result = upsertRowsByKey(masterData.departments, imported, row => normalizeDirectoryValue(row["Department / Restaurant"]));
+      } else if (kind === "people") {
+        const imported = rows.map(row => ({ ...row, company: row.company || "Turtle 23", email: String(row.email || "").trim().toLowerCase(), active: row.active || "Yes" })).filter(row => row.name);
+        result = upsertRowsByKey(masterData.people, imported, row => normalizeDirectoryValue(row.email || row.name));
+      } else if (kind === "contractTypes") {
+        const imported = rows.map(row => ({
+          ...row,
+          Category: row.Category || row["Contract Classification"] || "",
+          "Standard SLA Version": row["Standard SLA Version"] || standardSlaDataVersion,
+          Active: row.Active || "Yes"
+        })).filter(row => row["Contract Classification"] && (row["Type of Contract"] || row["Sub Type of Contract"]));
+        result = upsertRowsByKey(masterData.contractTypes, imported, row => [row["Contract Classification"], row["Type of Contract"], row["Sub Type of Contract"]].map(normalizeDirectoryValue).join("::"));
+      } else if (kind === "actionSla") {
+        const imported = rows.map(row => ({
+          ...row,
+          "Description / รายละเอียด": row["Description / รายละเอียด"] || actionDescriptionConfig[row.Action]?.descriptionTh || "",
+          "SLA Rule / วิธีนับ": row["SLA Rule / วิธีนับ"] || actionDescriptionConfig[row.Action]?.slaRuleTh || "",
+          "Action Data Version": row["Action Data Version"] || actionDataVersion,
+          Active: row.Active || "Yes"
+        })).filter(row => row.Action);
+        result = upsertRowsByKey(masterData.actionSla, imported, row => normalizeDirectoryValue(row.Action));
+      }
+      refreshDashboardDataFromContracts();
+      saveContractsDatabase();
+      await saveDriveDatabaseToCloud();
+      renderAll();
+      notifyDatabaseSaved(`${masterImportExportLabels[kind] || "Master Data"} import completed. ${result.added} added, ${result.updated} updated.`);
+      return result;
+    }
+
+    function importMasterDataTable(kind, file) {
+      if (!requireSystemAdministrator()) return;
+      if (!file) return;
+      const label = masterImportExportLabels[kind] || "Master Data";
+      const reader = new FileReader();
+      reader.addEventListener("load", async () => {
+        const rows = csvToObjects(reader.result);
+        if (!rows.length) {
+          window.alert("No valid rows were found in the selected CSV file.");
+          return;
+        }
+        if (!window.confirm(`Import ${rows.length} row(s) into ${label}? Matching records will be updated and other existing records will remain.`)) return;
+        const result = await applyMasterImportRows(kind, rows);
+        if (!result) window.alert(`No valid rows were found for ${label}.`);
+      });
+      reader.readAsText(file, "utf-8");
+    }
+
+    function openMasterImportPicker(kind) {
+      if (!requireSystemAdministrator()) return;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv,text/csv";
+      input.hidden = true;
+      input.addEventListener("change", event => {
+        importMasterDataTable(kind, event.target.files?.[0]);
+        input.remove();
+      }, { once: true });
+      document.body.appendChild(input);
+      input.click();
+    }
+
     function masterInput(field, value = "", options = {}) {
       const tag = options.multiline ? "textarea" : "input";
       const classes = options.select ? "select" : "input";
@@ -18752,6 +18982,16 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
       document.querySelector("#master")?.addEventListener("click", event => {
+        const importButton = event.target.closest("[data-master-import]");
+        if (importButton) {
+          openMasterImportPicker(importButton.dataset.masterImport);
+          return;
+        }
+        const exportButton = event.target.closest("[data-master-export]");
+        if (exportButton) {
+          exportMasterDataTable(exportButton.dataset.masterExport);
+          return;
+        }
         const removeButton = event.target.closest("[data-remove-master-row]");
         if (!removeButton) return;
         removeButton.closest("tr")?.remove();
@@ -18763,10 +19003,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       document.querySelector("#openDriveDatabase")?.setAttribute("href", driveDatabaseConfig.folderUrl);
       document.querySelector("#exportContractsCsv")?.addEventListener("click", exportContractsCsv);
       document.querySelector("#exportLogsCsv")?.addEventListener("click", exportLogsCsv);
-      document.querySelector("#importMasterContractsBtn")?.addEventListener("click", () => {
-        if (!requireSystemAdministrator()) return;
-        document.querySelector("#importContractsCsv")?.click();
-      });
       document.querySelector("#importContractsCsv")?.addEventListener("change", event => {
         importContractsCsv(event.target.files?.[0]);
         event.target.value = "";
