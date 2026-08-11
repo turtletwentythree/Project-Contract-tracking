@@ -8306,7 +8306,7 @@ def main():
       document.querySelector("#passwordAccountSelect").value = username;
       setPasswordManagementMessage("Password changed successfully. / เปลี่ยนรหัสผ่านเรียบร้อย", true);
       renderPasswordManagement();
-      notifyDatabaseSaved("Password changed. Database sync request sent.");
+      notifyDatabaseSaved("Password changed and saved.");
       if (username === "admin") logoutUser();
       return true;
     }
