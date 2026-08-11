@@ -3066,7 +3066,7 @@ def main():
                 <div class="panel-header">
                   <div>
                     <h2>Log Records</h2>
-                    <small>Edit In / Out dates from Log View Detail. Other fields are read only.</small>
+                    <small>Edit or delete incorrect created from Log View Detail.</small>
                   </div>
                 </div>
                 <div class="table-wrap">
@@ -3141,7 +3141,7 @@ def main():
 	                </div>
 	              </section>
 
-	              <section class="panel master-data-panel master-data-panel-full">
+	              <section class="panel master-data-panel master-data-panel-full" hidden aria-hidden="true">
 	                <div class="panel-header">
 	                  <div>
 	                    <h2>Contract Name Template</h2>
@@ -6039,6 +6039,8 @@ def main():
     }
 
     async function saveMasterDataFromUi() {
+      if (!requireSystemAdministrator()) return;
+      if (!window.confirm("Confirm save Master Data to Database?")) return;
       if (!normalizeMasterDataFromUi()) return;
       renderMasterData();
       saveContractsDatabase();
@@ -6157,7 +6159,7 @@ def main():
       notifications: ["Notification Queue", "NotificationQueueTable"],""",
         """      user: ["User Case Action", "เพิ่มเคส อัปเดทสถานะ และปิดเคสจาก Contract Status / Log View"],
       master: ["Master Data", "แก้ไขข้อมูล dropdown และบันทึกกลับ Shared Drive"],
-      confidential: ["Confidential Contract Status", "แสดงเฉพาะสัญญาลับสำหรับผู้มีสิทธิ์เข้าถึง"],
+      confidential: ["Confidential Contract Status", "Edit or delete incorrect created from."],
       notifications: ["Notification Queue", "NotificationQueueTable"],""",
     )
     html = html.replace(
