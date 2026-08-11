@@ -3071,7 +3071,7 @@ def main():
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th><th></th></tr></thead>
                     <tbody id="masterLogRows"></tbody>
                   </table>
                 </div>
@@ -5766,20 +5766,24 @@ def main():
 
       const logBody = document.querySelector("#masterLogRows");
       if (logBody) {
-        logBody.innerHTML = logRecords.map(row => `
+        logBody.innerHTML = logRecords.map(row => {
+          const actionChoices = row[12] && !updateActionList.includes(row[12]) ? [row[12], ...updateActionList] : updateActionList;
+          return `
           <tr>
-            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}">${masterReadOnly(row[0])}</td>
-            <td><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterReadOnly(row[1])}</td>
-            <td>${masterReadOnly(row[2])}</td>
-            <td>${masterReadOnly(row[4])}</td>
-            <td>${masterReadOnly(row[5])}</td>
+            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
+            <td>${masterInput("logNo", row[1], { type: "number" })}</td>
+            <td>${masterInput("cycle", row[2], { type: "number" })}</td>
+            <td>${masterInput("from", row[4])}</td>
+            <td>${masterInput("to", row[5])}</td>
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
             <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
-            <td>${masterReadOnly(row[8])}</td>
+            <td>${masterInput("sla", row[8], { type: "number" })}</td>
             <td>${masterReadOnly(row[9])}</td>
             <td>${masterReadOnly(row[10])}</td>
-            <td>${masterReadOnly(row[12])}</td>
-          </tr>`).join("");
+            <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
+            <td>${masterDeleteButton()}</td>
+          </tr>`;
+        }).join("");
       }
 
       const deptBody = document.querySelector("#masterDepartmentRows");
@@ -5873,14 +5877,16 @@ def main():
       if (!requireSystemAdministrator()) return false;
       const originalContracts = new Map(contracts.map(contract => [String(contract.id || "").trim(), contract]));
       const contractRows = readMasterRows("#masterContractRows", ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "addCaseDate", "due"], "_originalId");
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "inDate", "outDate"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "action"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
       const addCaseDateMap = new Map();
-      const logDateEdits = new Map();
+      const nextLogRecords = [];
+      const usedLogKeys = new Set();
+      const firstLogInChanged = new Set();
       let hasContractError = false;
-      let hasLogDateError = false;
+      let hasLogError = false;
 
       contractRows.forEach(row => {
         const originalId = String(row._originalId || "").trim();
@@ -5932,47 +5938,74 @@ def main():
 
       logRows.forEach(row => {
         const originalContractId = String(row._originalContractId || "").trim();
-        const contractId = idMap.get(originalContractId) || originalContractId;
-        const logNo = String(row._originalLogNo || "").trim();
-        if (!contractId || !logNo) return;
-        const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === logNo) || [];
+        const rawContractId = String(row.contractId || originalContractId).trim();
+        const contractId = idMap.get(rawContractId) || rawContractId;
+        const originalLogNo = String(row._originalLogNo || "").trim();
+        const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === originalLogNo) || [];
+        const logNo = Number(row.logNo || originalLog[1] || 0);
+        const cycle = Number(row.cycle || originalLog[2] || 1);
+        const from = String(row.from || originalLog[4] || "").trim();
+        const to = String(row.to || originalLog[5] || "").trim();
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
-        if (!nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn))) {
-          hasLogDateError = true;
+        const sla = Number(row.sla || originalLog[8] || 0);
+        const action = String(row.action || originalLog[12] || "").trim();
+        const logKey = `${contractId}::${logNo}`;
+        if (!contractId) {
+          hasLogError = true;
           return;
         }
-        const originalIn = dateToInputValue(originalLog[6] || "");
-        const originalOut = dateToInputValue(originalLog[7] || "");
-        if (nextIn !== originalIn || nextOut !== originalOut) {
-          logDateEdits.set(`${contractId}::${logNo}`, { inDate: nextIn, outDate: nextOut });
+        if (!keptIds.has(contractId)) {
+          const mappedOriginalId = idMap.get(originalContractId) || originalContractId;
+          if (!keptIds.has(mappedOriginalId) && rawContractId === originalContractId) return;
+          hasLogError = true;
+          return;
         }
+        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !action || usedLogKeys.has(logKey)) {
+          hasLogError = true;
+          return;
+        }
+        usedLogKeys.add(logKey);
+        const originalIn = dateToInputValue(originalLog[6] || "");
+        if (Number(logNo) === 1 && nextIn !== originalIn) firstLogInChanged.add(contractId);
+        const nextLog = Array.isArray(originalLog) ? [...originalLog] : Array.from({ length: logDatabaseHeaders.length }, () => "");
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
+        nextLog[0] = contractId;
+        nextLog[1] = logNo;
+        nextLog[2] = cycle;
+        nextLog[3] = `From ${from} >> To ${to}`;
+        nextLog[4] = from;
+        nextLog[5] = to;
+        nextLog[6] = nextIn;
+        nextLog[7] = nextOut;
+        nextLog[8] = sla;
+        nextLog[12] = action;
+        nextLog[28] = Number(nextLog[28] || sla) || sla;
+        if (changed) {
+          nextLog[13] = nextLog[13] || `${action} by ${currentUser?.name || "Admin"}`;
+          nextLog[21] = currentUser?.name || "Admin";
+          nextLog[22] = localIsoDateTime();
+        }
+        recalculateLogTiming(nextLog);
+        nextLogRecords.push(nextLog);
       });
 
       if (hasContractError) {
         showToast("Contract ID and Contract Name are required, and Contract ID must not duplicate");
         return false;
       }
-      if (hasLogDateError) {
-        showToast("Log Records require In date, and Out date must not be before In date");
+      if (hasLogError) {
+        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Action, and unique Log No per Contract");
         return false;
       }
 
       contracts.splice(0, contracts.length, ...nextContracts);
-      logRecords.splice(0, logRecords.length, ...logRecords
-        .map(row => {
-          if (Array.isArray(row) && idMap.has(row[0])) row[0] = idMap.get(row[0]);
-          return row;
-        })
-        .filter(row => keptIds.has(row?.[0])));
+      logRecords.splice(0, logRecords.length, ...nextLogRecords
+        .filter(row => keptIds.has(row?.[0]))
+        .sort((a, b) => String(a[0] || "").localeCompare(String(b[0] || "")) || (Number(a[1]) || 0) - (Number(b[1]) || 0)));
       logRecords.forEach(row => {
         const addCaseDate = addCaseDateMap.get(row?.[0]);
-        if (addCaseDate && Number(row?.[1] || 0) === 1) row[6] = addCaseDate;
-        const edit = logDateEdits.get(`${row?.[0]}::${row?.[1]}`);
-        if (edit) {
-          row[6] = edit.inDate || row[6];
-          row[7] = edit.outDate || "";
-        }
+        if (addCaseDate && Number(row?.[1] || 0) === 1 && !firstLogInChanged.has(row?.[0])) row[6] = addCaseDate;
         recalculateLogTiming(row);
       });
       contracts.forEach(syncContractTimingFromLogs);
