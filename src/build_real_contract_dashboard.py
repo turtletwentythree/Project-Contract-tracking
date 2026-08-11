@@ -8143,6 +8143,7 @@ def main():
                 <h2>Admin Tools <span class="badge black admin-only-badge">Admin Only</span></h2>
                 <small>เครื่องมือสำหรับผู้ดูแลระบบ</small>
               </div>
+              <button class="primary-button" type="button" id="saveAdminToolsBtn" data-admin-only hidden>Save Admin Tools</button>
             </div>
             <div class="master-data-grid">
 ''' + admin_master_panels + '''            </div>
@@ -8594,6 +8595,7 @@ def main():
         setPasswordManagementMessage(error);
         return false;
       }
+      if (!window.confirm(`Confirm change password for ${username}?`)) return false;
       administrativeSecurityState.accounts[username].passwordHash = newHash;
       administrativeSecurityState.accounts[username].passwordHashHistory = [newHash, ...(administrativeSecurityState.accounts[username].passwordHashHistory || [])].slice(0, 5);
       administrativeSecurityState.accounts[username].failedAttempts = 0;
@@ -8619,9 +8621,12 @@ def main():
         setPasswordManagementMessage("Admin Current Password is incorrect.");
         return false;
       }
+      if (!window.confirm(`Confirm reset ${username} to the default password?`)) return false;
       const previousHashes = credentialRecord(username)?.passwordHashHistory || [];
       administrativeSecurityState.accounts[username] = { passwordHash: defaultPasswordHashes[username], passwordHashHistory: [defaultPasswordHashes[username], ...previousHashes].filter((value, index, rows) => rows.indexOf(value) === index).slice(0, 5), failedAttempts: 0, locked: false };
       appendPasswordAudit(username, "Reset to Default Password", form.get("remark"));
+      saveContractsDatabase();
+      await saveDriveDatabaseToCloud();
       setPasswordManagementMessage("Default password restored. / คืนค่ารหัสผ่านเริ่มต้นแล้ว", true);
       renderPasswordManagement();
       if (username === "admin") logoutUser();
@@ -8637,10 +8642,13 @@ def main():
         setPasswordManagementMessage("Admin Current Password is incorrect.");
         return false;
       }
+      if (!window.confirm(`Confirm unlock account ${username}?`)) return false;
       const account = credentialRecord(username);
       account.locked = false;
       account.failedAttempts = 0;
       appendPasswordAudit(username, "Unlock Account", form.get("remark"));
+      saveContractsDatabase();
+      await saveDriveDatabaseToCloud();
       setPasswordManagementMessage("Account unlocked. / ปลดล็อกบัญชีแล้ว", true);
       renderPasswordManagement();
       return true;
@@ -8657,7 +8665,7 @@ def main():
       }
       const queue = document.querySelector("#dueApprovalQueueRows");
       if (queue) queue.innerHTML = dueDateAdjustmentRequests.length ? dueDateAdjustmentRequests.slice().reverse().map(request => `
-        <tr><td>${escapeHtml(request.requestId)}</td><td>${escapeHtml(request.contractId)}</td><td>${escapeHtml(request.requestedDue)}</td><td>${escapeHtml(request.requestedBy)}</td><td>${escapeHtml(request.status)}</td><td><button class="secondary-button" type="button" data-review-due-request="${escapeHtml(request.requestId)}">Review</button></td></tr>`).join("") : '<tr><td colspan="6">No Due Date requests</td></tr>';
+        <tr data-admin-request-id="${escapeHtml(request.requestId)}"><td>${escapeHtml(request.requestId)}</td><td>${escapeHtml(request.contractId)}</td><td><input class="master-input" type="date" data-admin-request-field="requestedDue" value="${escapeHtml(request.requestedDue || "")}"></td><td><input class="master-input" type="text" data-admin-request-field="requestedBy" value="${escapeHtml(request.requestedBy || "")}"></td><td><select class="master-input" data-admin-request-field="status">${[...new Set([request.status || "Pending", "Pending", "Approved and Applied", "Rejected", "More Information Requested"])].map(status => `<option value="${status}"${status === request.status ? " selected" : ""}>${status}</option>`).join("")}</select></td><td><button class="secondary-button" type="button" data-review-due-request="${escapeHtml(request.requestId)}">Review</button></td></tr>`).join("") : '<tr><td colspan="6">No Due Date requests</td></tr>';
       const history = document.querySelector("#dueAdjustmentHistoryRows");
       if (history) history.innerHTML = administrativeSecurityState.dueDateHistory.length
         ? administrativeSecurityState.dueDateHistory.map(item => `<tr><td>${escapeHtml(item.requestId)}</td><td>${escapeHtml(item.decision)}</td><td>${escapeHtml(item.finalDue || "-")}</td><td>${escapeHtml(item.admin)}</td><td>${escapeHtml(formatDateTime(item.decidedAt))}</td></tr>`).join("")
@@ -8828,6 +8836,7 @@ def main():
         showToast("Reason for Different Final Date is required.");
         return false;
       }
+      if (!window.confirm(`Confirm ${decision} for ${request.requestId}? This change will be saved to the database.`)) return false;
       if (decision === "Approve and Apply") {
         contract.originalDue = contract.originalDue || request.currentDue || contract.due;
         contract.due = finalDue;
@@ -8865,6 +8874,57 @@ def main():
       return true;
     }
 
+    async function saveAdminToolsChanges() {
+      if (!requireSystemAdministrator()) return false;
+      const rows = [...document.querySelectorAll("#dueApprovalQueueRows tr[data-admin-request-id]")];
+      const changes = [];
+      for (const row of rows) {
+        const request = dueDateAdjustmentRequests.find(item => item.requestId === row.dataset.adminRequestId);
+        if (!request) continue;
+        const requestedDue = String(row.querySelector('[data-admin-request-field="requestedDue"]')?.value || "").trim();
+        const requestedBy = String(row.querySelector('[data-admin-request-field="requestedBy"]')?.value || "").trim();
+        const status = String(row.querySelector('[data-admin-request-field="status"]')?.value || "Pending").trim();
+        if (!requestedDue || !requestedBy) {
+          window.alert(`Requested Due Date and Requested By are required for ${request.requestId}.`);
+          return false;
+        }
+        const changedFields = [];
+        if (requestedDue !== String(request.requestedDue || "")) changedFields.push(`Requested Due Date: ${request.requestedDue || "-"} -> ${requestedDue}`);
+        if (requestedBy !== String(request.requestedBy || "")) changedFields.push(`Requested By: ${request.requestedBy || "-"} -> ${requestedBy}`);
+        if (status !== String(request.status || "")) changedFields.push(`Status: ${request.status || "-"} -> ${status}`);
+        if (changedFields.length) changes.push({ request, requestedDue, requestedBy, status, changedFields });
+      }
+      if (!changes.length) {
+        window.alert("No Admin Tools changes to save.");
+        return false;
+      }
+      if (!window.confirm(`Confirm save ${changes.length} Admin Tools change(s) to Database?`)) return false;
+      const changedAt = localIsoDateTime();
+      changes.forEach(change => {
+        change.request.requestedDue = change.requestedDue;
+        change.request.requestedBy = change.requestedBy;
+        change.request.status = change.status;
+        change.request.lastModifiedBy = "admin";
+        change.request.lastModifiedAt = changedAt;
+        administrativeSecurityState.dueDateHistory.unshift({
+          requestId: change.request.requestId,
+          contractId: change.request.contractId,
+          decision: "Admin Tools Direct Edit",
+          finalDue: change.requestedDue,
+          decisionReason: change.changedFields.join("; "),
+          admin: "admin",
+          decidedAt: changedAt
+        });
+      });
+      administrativeSecurityState.dueDateHistory = administrativeSecurityState.dueDateHistory.slice(0, 200);
+      persistAdministrativeSecurityState();
+      saveContractsDatabase();
+      await saveDriveDatabaseToCloud();
+      renderDueDateApprovalQueue();
+      notifyDatabaseSaved(`Admin Tools saved. ${changes.length} record(s) updated.`);
+      return true;
+    }
+
     function renderAdministrativeControls() {
       const admin = isSystemAdministrator();
       document.querySelectorAll("[data-admin-only]").forEach(node => { node.hidden = !admin; });
@@ -8876,6 +8936,7 @@ def main():
     }
 
     function setupAdministrativeControls() {
+      document.querySelector("#saveAdminToolsBtn")?.addEventListener("click", saveAdminToolsChanges);
       document.querySelector("#passwordAccountSelect")?.addEventListener("change", renderPasswordManagement);
       document.querySelector("#passwordManagementForm")?.addEventListener("submit", event => { event.preventDefault(); changeManagedPassword(event.currentTarget); });
       document.querySelector("#resetPasswordBtn")?.addEventListener("click", resetManagedPassword);
