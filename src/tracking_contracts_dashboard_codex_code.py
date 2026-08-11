@@ -3065,6 +3065,21 @@ def main():
               <section class="panel master-data-panel master-data-panel-full">
                 <div class="panel-header">
                   <div>
+                    <h2>Confidential Contract Status</h2>
+                    <small>Edit or delete incorrect created from.</small>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="master-table">
+                    <thead><tr><th>Contract ID</th><th>Contract Name</th><th>Department / Restaurant</th><th>Contract Owner</th><th>Type of Contract</th><th>Stage</th><th>Status Update</th><th>Station Owner</th><th>Add Case Date</th><th>Due Date</th><th></th></tr></thead>
+                    <tbody id="masterConfidentialContractRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="panel master-data-panel master-data-panel-full">
+                <div class="panel-header">
+                  <div>
                     <h2>Log Records</h2>
                     <small>Edit or delete incorrect created from Log View Detail.</small>
                   </div>
@@ -3081,7 +3096,7 @@ def main():
                 <div class="panel-header">
                   <div>
                     <h2>Department Master</h2>
-                    <small>Department / Restaurant + code for Contract ID</small>
+                    <small>Add, edit, or delete Department rows</small>
                   </div>
                   <button class="secondary-button" type="button" data-add-master-row="departments">Add Row</button>
                 </div>
@@ -3097,7 +3112,7 @@ def main():
                 <div class="panel-header">
                   <div>
                     <h2>People / Owner Master</h2>
-                    <small>Used by Owner, To, CC and email lookup</small>
+                    <small>Add, edit, or delete Owner rows used by To, CC and email lookup</small>
                   </div>
                   <button class="secondary-button" type="button" data-add-master-row="people">Add Row</button>
                 </div>
@@ -3113,7 +3128,7 @@ def main():
                 <div class="panel-header">
 	                  <div>
                     <h2>Type of Contract Master</h2>
-	                    <small>Used by Type/Sub Type dropdown, tooltip and Total SLA</small>
+	                    <small>Add, edit, or delete Type/Sub Type rows used by dropdown, tooltip and Total SLA</small>
 	                  </div>
                   <button class="secondary-button" type="button" data-add-master-row="contractTypes">Add Row</button>
                 </div>
@@ -3129,7 +3144,7 @@ def main():
 	                <div class="panel-header">
 	                  <div>
 	                    <h2>Action SLA Master</h2>
-	                    <small>Included in Total SLA · Action SLA รวมอยู่ใน Total SLA แล้ว ไม่บวกซ้ำ</small>
+	                    <small>Add, edit, or delete Action SLA rows included in Total SLA</small>
 	                  </div>
 	                  <button class="secondary-button" type="button" data-add-master-row="actionSla">Add Row</button>
 	                </div>
@@ -5745,10 +5760,8 @@ def main():
       return stationParts(contract.station).to || contract.stationOwner || contract.owner || "";
     }
 
-    function renderMasterData() {
-      const contractBody = document.querySelector("#masterContractRows");
-      if (contractBody) {
-        contractBody.innerHTML = contracts.map(contract => `
+    function masterContractRow(contract) {
+      return `
           <tr>
             <td><input type="hidden" data-master-field="_originalId" value="${escapeHtml(contract.id)}">${masterInput("id", contract.id)}</td>
             <td>${masterInput("name", contract.name)}</td>
@@ -5761,7 +5774,18 @@ def main():
             <td>${masterInput("addCaseDate", addCaseStartDateForContract(contract), { type: "date" })}</td>
             <td>${masterInput("due", contract.due, { type: "date" })}</td>
             <td>${masterDeleteButton()}</td>
-          </tr>`).join("");
+          </tr>`;
+    }
+
+    function renderMasterData() {
+      const contractBody = document.querySelector("#masterContractRows");
+      if (contractBody) {
+        contractBody.innerHTML = contracts.filter(contract => !isConfidentialContract(contract)).map(masterContractRow).join("");
+      }
+
+      const confidentialContractBody = document.querySelector("#masterConfidentialContractRows");
+      if (confidentialContractBody) {
+        confidentialContractBody.innerHTML = contracts.filter(isConfidentialContract).map(masterContractRow).join("");
       }
 
       const logBody = document.querySelector("#masterLogRows");
@@ -5876,7 +5900,11 @@ def main():
     function normalizeMasterDataFromUi() {
       if (!requireSystemAdministrator()) return false;
       const originalContracts = new Map(contracts.map(contract => [String(contract.id || "").trim(), contract]));
-      const contractRows = readMasterRows("#masterContractRows", ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "addCaseDate", "due"], "_originalId");
+      const contractFields = ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "addCaseDate", "due"];
+      const contractRows = [
+        ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
+        ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
+      ];
       const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "action"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
@@ -5907,7 +5935,7 @@ def main():
         const stationOwner = String(row.stationOwner || stationOwnerForMasterContract(original) || "Legal").trim();
         const totalSla = Number(original.totalSla || totalSlaFor(type)) || 0;
         const used = Number(original.used || original.days || 0) || 0;
-        const accessLevel = String(original.accessLevel || accessLevelForContractType(type) || "Normal").trim();
+        const accessLevel = String(row.accessLevel || original.accessLevel || accessLevelForContractType(type) || "Normal").trim();
         const addCaseDate = dateToInputValue(row.addCaseDate || original.addCaseDate || firstLogFor(originalId)?.[6] || firstLogFor(id)?.[6] || "");
         addCaseDateMap.set(id, addCaseDate);
         nextContracts.push({
