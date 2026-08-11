@@ -3049,6 +3049,10 @@ def main():
                     <h2>Contract Records</h2>
                     <small>Edit or delete incorrect cases created from Add Case</small>
                   </div>
+                  <div class="master-data-actions">
+                    <button class="secondary-button" type="button" id="importMasterContractsBtn">Import Data</button>
+                    <input type="file" id="importContractsCsv" accept=".csv,text/csv" hidden>
+                  </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -5384,6 +5388,11 @@ def main():
       status.textContent = message || `${contracts.length} contracts · ${driveDatabaseConfig.contractsCsv}`;
     }
 
+    function notifyDatabaseSaved(message) {
+      showToast(message);
+      window.alert(message);
+    }
+
     function migrateContractIdsToDepartmentFormat(contractRows = [], logRows = []) {
       const oldIdPattern = /^CT-([NC])-26-(\\d+)$/i;
       const idMap = new Map();
@@ -5661,17 +5670,28 @@ def main():
       if (!requireSystemAdministrator()) return;
       if (!file) return;
       const reader = new FileReader();
-      reader.addEventListener("load", () => {
+      reader.addEventListener("load", async () => {
         const rows = csvToObjects(reader.result);
         const importedContracts = rows.map(contractFromDbRow).filter(item => item.id && item.name);
         if (!importedContracts.length) {
           showToast("No valid contracts in CSV");
+          window.alert("No valid contracts were found in the selected CSV file.");
           return;
         }
-        migrateContractIdsToDepartmentFormat(importedContracts, logRecords);
-        const importedIds = new Set(importedContracts.map(item => item.id));
-        logRecords.splice(0, logRecords.length, ...logRecords.filter(row => importedIds.has(row[0])));
+        if (!window.confirm(`Import ${importedContracts.length} contract record(s) into Master Data? Matching Contract IDs will be updated and other existing records will remain.`)) return;
+        migrateContractIdsToDepartmentFormat(importedContracts, []);
+        const existingById = new Map(contracts.map((contract, index) => [contract.id, index]));
+        let addedCount = 0;
+        let updatedCount = 0;
         importedContracts.forEach(contract => {
+          const existingIndex = existingById.get(contract.id);
+          if (existingIndex >= 0) {
+            contracts[existingIndex] = { ...contracts[existingIndex], ...contract };
+            updatedCount += 1;
+          } else {
+            contracts.push(contract);
+            addedCount += 1;
+          }
           if (!latestLogFor(contract.id)) {
             addLogRecord({
               contractId: contract.id,
@@ -5688,11 +5708,11 @@ def main():
             });
           }
         });
-        contracts.splice(0, contracts.length, ...importedContracts);
         refreshDashboardDataFromContracts();
         saveContractsDatabase();
+        await saveDriveDatabaseToCloud();
         renderAll();
-        showToast(`${importedContracts.length} contracts imported`);
+        notifyDatabaseSaved(`Import completed. ${addedCount} added, ${updatedCount} updated. Database sync request sent.`);
       });
       reader.readAsText(file, "utf-8");
     }
@@ -6025,7 +6045,7 @@ def main():
       await saveDriveDatabaseToCloud();
       populateUserControls();
       renderUserCasePreview();
-      showToast("Master Data saved to Shared Drive");
+      notifyDatabaseSaved("Master Data saved. Database sync request sent.");
     }
 
     function setupMasterDataControls() {
@@ -6045,6 +6065,10 @@ def main():
       document.querySelector("#openDriveDatabase")?.setAttribute("href", driveDatabaseConfig.folderUrl);
       document.querySelector("#exportContractsCsv")?.addEventListener("click", exportContractsCsv);
       document.querySelector("#exportLogsCsv")?.addEventListener("click", exportLogsCsv);
+      document.querySelector("#importMasterContractsBtn")?.addEventListener("click", () => {
+        if (!requireSystemAdministrator()) return;
+        document.querySelector("#importContractsCsv")?.click();
+      });
       document.querySelector("#importContractsCsv")?.addEventListener("change", event => {
         importContractsCsv(event.target.files?.[0]);
         event.target.value = "";
@@ -8276,10 +8300,13 @@ def main():
       administrativeSecurityState.accounts[username].failedAttempts = 0;
       administrativeSecurityState.accounts[username].locked = false;
       appendPasswordAudit(username, "Change Password", remark);
+      saveContractsDatabase();
+      await saveDriveDatabaseToCloud();
       formElement.reset();
       document.querySelector("#passwordAccountSelect").value = username;
       setPasswordManagementMessage("Password changed successfully. / เปลี่ยนรหัสผ่านเรียบร้อย", true);
       renderPasswordManagement();
+      notifyDatabaseSaved("Password changed. Database sync request sent.");
       if (username === "admin") logoutUser();
       return true;
     }
