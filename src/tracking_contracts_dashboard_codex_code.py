@@ -3058,6 +3058,21 @@ def main():
                 </div>
               </section>
 
+              <section class="panel master-data-panel master-data-panel-full">
+                <div class="panel-header">
+                  <div>
+                    <h2>Log Records</h2>
+                    <small>Edit In / Out dates from Log View Detail. Other fields are read only.</small>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="master-table">
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th></tr></thead>
+                    <tbody id="masterLogRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
               <section class="panel master-data-panel">
                 <div class="panel-header">
                   <div>
@@ -4641,6 +4656,7 @@ def main():
       const fromName = safeText(from);
       const toName = safeText(to) || safeText(email);
       const dueDate = safeText(formatDateForEmail(contract?.due)).replace(/^[-–]$/, "");
+      const systemUrl = "https://turtletwentythree.github.io/Project-Contract-tracking/";
       const slaNumber = Number(sla) || 0;
       const copyByAction = {
         "Submit to Review": {
@@ -4705,7 +4721,8 @@ def main():
         `From: ${fromName}`,
         `To: ${toName}`,
         `Action SLA: ${slaNumber} Working Day${slaNumber === 1 ? "" : "s"}`,
-        `Due Date: ${dueDate}`
+        `Due Date: ${dueDate}`,
+        `System Link: ${systemUrl}`
       ];
       if (reasonText) englishLines.push("", copy.reasonEn, reasonText);
       englishLines.push("", "Please review and proceed with the contract accordingly.");
@@ -4726,6 +4743,7 @@ def main():
       if (reasonText) thaiLines.push("", copy.reasonTh, reasonText);
       thaiLines.push("", "กรุณาตรวจสอบและดำเนินการตามขั้นตอนที่เกี่ยวข้อง", "", "Contract Tracking System");
 
+      thaiLines.splice(Math.max(thaiLines.length - 1, 0), 0, "", `System Link: ${systemUrl}`);
       const body = [...englishLines, "", "", ...thaiLines].join("\\n");
       return {
         to: email || "",
@@ -5695,6 +5713,10 @@ def main():
       return masterInput(field, value || "Yes", { select: true, choices: ["Yes", "No"] });
     }
 
+    function masterReadOnly(value = "") {
+      return `<span class="master-readonly">${escapeHtml(value === "" || value == null ? "-" : value)}</span>`;
+    }
+
     function masterDeleteButton() {
       return `<button class="icon-button" type="button" data-remove-master-row title="Remove row">×</button>`;
     }
@@ -5719,6 +5741,24 @@ def main():
             <td>${masterInput("addCaseDate", addCaseStartDateForContract(contract), { type: "date" })}</td>
             <td>${masterInput("due", contract.due, { type: "date" })}</td>
             <td>${masterDeleteButton()}</td>
+          </tr>`).join("");
+      }
+
+      const logBody = document.querySelector("#masterLogRows");
+      if (logBody) {
+        logBody.innerHTML = logRecords.map(row => `
+          <tr>
+            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}">${masterReadOnly(row[0])}</td>
+            <td><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterReadOnly(row[1])}</td>
+            <td>${masterReadOnly(row[2])}</td>
+            <td>${masterReadOnly(row[4])}</td>
+            <td>${masterReadOnly(row[5])}</td>
+            <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
+            <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
+            <td>${masterReadOnly(row[8])}</td>
+            <td>${masterReadOnly(row[9])}</td>
+            <td>${masterReadOnly(row[10])}</td>
+            <td>${masterReadOnly(row[12])}</td>
           </tr>`).join("");
       }
 
@@ -5813,11 +5853,14 @@ def main():
       if (!requireSystemAdministrator()) return false;
       const originalContracts = new Map(contracts.map(contract => [String(contract.id || "").trim(), contract]));
       const contractRows = readMasterRows("#masterContractRows", ["_originalId", "id", "name", "department", "owner", "type", "stage", "status", "stationOwner", "addCaseDate", "due"], "_originalId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "inDate", "outDate"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
       const addCaseDateMap = new Map();
+      const logDateEdits = new Map();
       let hasContractError = false;
+      let hasLogDateError = false;
 
       contractRows.forEach(row => {
         const originalId = String(row._originalId || "").trim();
@@ -5867,8 +5910,31 @@ def main():
         if (originalId && originalId !== id) idMap.set(originalId, id);
       });
 
+      logRows.forEach(row => {
+        const originalContractId = String(row._originalContractId || "").trim();
+        const contractId = idMap.get(originalContractId) || originalContractId;
+        const logNo = String(row._originalLogNo || "").trim();
+        if (!contractId || !logNo) return;
+        const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === logNo) || [];
+        const nextIn = dateToInputValue(row.inDate || "");
+        const nextOut = dateToInputValue(row.outDate || "");
+        if (!nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn))) {
+          hasLogDateError = true;
+          return;
+        }
+        const originalIn = dateToInputValue(originalLog[6] || "");
+        const originalOut = dateToInputValue(originalLog[7] || "");
+        if (nextIn !== originalIn || nextOut !== originalOut) {
+          logDateEdits.set(`${contractId}::${logNo}`, { inDate: nextIn, outDate: nextOut });
+        }
+      });
+
       if (hasContractError) {
         showToast("Contract ID and Contract Name are required, and Contract ID must not duplicate");
+        return false;
+      }
+      if (hasLogDateError) {
+        showToast("Log Records require In date, and Out date must not be before In date");
         return false;
       }
 
@@ -5882,6 +5948,11 @@ def main():
       logRecords.forEach(row => {
         const addCaseDate = addCaseDateMap.get(row?.[0]);
         if (addCaseDate && Number(row?.[1] || 0) === 1) row[6] = addCaseDate;
+        const edit = logDateEdits.get(`${row?.[0]}::${row?.[1]}`);
+        if (edit) {
+          row[6] = edit.inDate || row[6];
+          row[7] = edit.outDate || "";
+        }
         recalculateLogTiming(row);
       });
       contracts.forEach(syncContractTimingFromLogs);
