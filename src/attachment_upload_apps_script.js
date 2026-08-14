@@ -165,22 +165,31 @@ function installDailyBackupTrigger_() {
 }
 
 function readTextFileByName_(folder, fileName) {
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return "";
-  return files.next().getBlob().getDataAsString("UTF-8").replace(/^\uFEFF/, "");
+  const file = latestFileByName_(folder, fileName);
+  if (!file) return "";
+  return file.getBlob().getDataAsString("UTF-8").replace(/^\uFEFF/, "");
+}
+
+function latestFileByName_(folder, fileName) {
+  const files = folder.getFilesByName(cleanFileName_(fileName));
+  let latest = null;
+  while (files.hasNext()) {
+    const candidate = files.next();
+    if (!latest || candidate.getLastUpdated().getTime() > latest.getLastUpdated().getTime()) latest = candidate;
+  }
+  return latest;
 }
 
 function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, prefix) {
   const name = cleanFileName_(fileName || "database.csv");
-  const files = sourceFolder.getFilesByName(name);
-  if (!files.hasNext()) {
+  const sourceFile = latestFileByName_(sourceFolder, name);
+  if (!sourceFile) {
     return {
       sourceName: name,
       skipped: true,
       reason: "Source file not found"
     };
   }
-  const sourceFile = files.next();
   const backupName = cleanFileName_([prefix, stamp, name].join("_"));
   const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
   applyBestEffortFileSharing_(backupFile);
@@ -197,13 +206,18 @@ function upsertTextFileByName_(folder, fileName, text) {
   const name = cleanFileName_(fileName || "database.csv");
   const content = String(text || "");
   const files = folder.getFilesByName(name);
-  const file = files.hasNext()
-    ? files.next().setContent(content)
-    : folder.createFile(name, content, MimeType.CSV);
+  const matches = [];
+  while (files.hasNext()) matches.push(files.next());
+  matches.sort(function(a, b) { return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); });
+  const file = matches.length ? matches[0].setContent(content) : folder.createFile(name, content, MimeType.CSV);
+  matches.slice(1).forEach(function(duplicate) {
+    try { duplicate.setTrashed(true); } catch (error) { console.warn("Duplicate CSV could not be trashed: " + errorMessage_(error)); }
+  });
   applyBestEffortFileSharing_(file);
   return {
     id: file.getId(),
     name: file.getName(),
+    updatedAt: file.getLastUpdated().toISOString(),
     url: file.getUrl(),
     downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId()
   };
