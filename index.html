@@ -7241,6 +7241,41 @@
                     </select>
                     <small class="form-hint">Status: Signed / Completed = case finished · Cancelled = case closed without completion</small>
                   </label>
+                  <label class="form-field">
+                    <span class="bilingual-label"><span>To<span class="field-required-mark" aria-hidden="true">*</span></span><span>ส่งถึง<span class="field-required-mark" aria-hidden="true">*</span></span></span>
+                    <input class="input" name="to" id="closeTo" list="peopleOptions" required autocomplete="off" placeholder="Select or type the recipient&#10;เลือกหรือพิมพ์ชื่อผู้รับ" aria-label="To / ส่งถึง">
+                  </label>
+                  <input type="hidden" name="toEmail" id="closeToEmail">
+
+                  <div class="form-field full update-attachment-section" id="closeAttachmentSection" tabindex="-1">
+                    <div class="attachment-heading">
+                      <span class="bilingual-stack update-bilingual-label">
+                        <span class="en">Attachments</span>
+                        <span class="th">ไฟล์แนบ</span>
+                      </span>
+                      <span class="attachment-count bilingual-stack" id="closeAttachmentCount">
+                        <span class="en">0 files</span>
+                        <span class="th">0 ไฟล์</span>
+                      </span>
+                    </div>
+                    <div class="attachment-dropzone" id="closeAttachmentDropzone">
+                      <input id="closeAttachmentInput" type="file" multiple hidden
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
+                      <button class="ghost-button compact-attach-button" type="button" id="closeAttachFilesBtn">
+                        <span class="button-bilingual"><strong>Attach Files</strong><small>แนบไฟล์</small></span>
+                      </button>
+                      <span class="attachment-drop-copy bilingual-stack">
+                        <span class="en">Drop multiple files here</span>
+                        <span class="th">ลากและวางไฟล์หลายไฟล์ที่นี่</span>
+                      </span>
+                    </div>
+                    <div class="attachment-list" id="closeAttachmentList" hidden></div>
+                    <div class="compact-help bilingual-stack">
+                      <span class="en">Optional · Up to 10 files · 20 MB per file</span>
+                      <span class="th">ไม่บังคับ · สูงสุด 10 ไฟล์ · ไฟล์ละไม่เกิน 20 MB</span>
+                    </div>
+                    <div class="field-validation-error bilingual-error" id="closeAttachmentError"></div>
+                  </div>
                   <input type="hidden" name="owner" id="closeOwner">
                   <input type="hidden" name="closeDate" id="closeDate">
                   <div class="runtime-field close-system-summary">
@@ -13105,6 +13140,7 @@
       authenticatedApplicationInitialized = true;
       initializeEditableDropdowns();
       setupUpdateAttachmentAndCc();
+      setupCloseCaseEmail();
       setCaseActionStep("add");
       setupCsvDatabaseControls();
       setupMasterDataControls();
@@ -14589,6 +14625,7 @@ Tracking Contracts System</div>
     const UPDATE_ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png"]);
     const UPDATE_BLOCKED_EXTENSIONS = new Set(["exe", "bat", "cmd", "com", "js", "msi"]);
     let updateAttachmentQueue = [];
+    let closeAttachmentQueue = [];
     let updateCcRecipients = [];
     let updateFileSequence = 1;
 
@@ -14698,6 +14735,91 @@ Tracking Contracts System</div>
       if (input) input.value = "";
       setAttachmentValidation();
       renderUpdateAttachmentQueue();
+    }
+
+    function renderCloseAttachmentQueue() {
+      const list = document.querySelector("#closeAttachmentList");
+      const count = document.querySelector("#closeAttachmentCount");
+      if (count) count.innerHTML = `<span class="en">${closeAttachmentQueue.length} file${closeAttachmentQueue.length === 1 ? "" : "s"}</span><span class="th">${closeAttachmentQueue.length} ไฟล์</span>`;
+      if (!list) return;
+      list.hidden = closeAttachmentQueue.length === 0;
+      list.innerHTML = closeAttachmentQueue.map(item => `
+        <div class="attachment-row" data-close-attachment-queue-id="${escapeHtml(item.queueId)}">
+          <span class="attachment-file-name" title="${escapeHtml(item.originalFileName)}">${escapeHtml(item.originalFileName)}</span>
+          <span class="attachment-file-size">${escapeHtml(formatUpdateFileSize(item.fileSize))}</span>
+          <span class="attachment-file-status">${escapeHtml(item.status || "Ready")}</span>
+          <button class="attachment-remove" type="button" data-remove-close-attachment="${escapeHtml(item.queueId)}">Remove</button>
+        </div>`).join("");
+    }
+
+    function setCloseAttachmentValidation(messageEn = "", messageTh = "") {
+      const section = document.querySelector("#closeAttachmentSection");
+      const error = document.querySelector("#closeAttachmentError");
+      if (!section || !error) return;
+      const hasError = Boolean(messageEn || messageTh);
+      section.classList.toggle("validation-error", hasError);
+      section.setAttribute("aria-invalid", String(hasError));
+      error.innerHTML = hasError ? `<span class="en">${escapeHtml(messageEn)}</span><span class="th">${escapeHtml(messageTh)}</span>` : "";
+    }
+
+    function addFilesToCloseQueue(fileList) {
+      const files = [...(fileList || [])];
+      if (!files.length) return;
+      setCloseAttachmentValidation();
+      if (closeAttachmentQueue.length + files.length > UPDATE_MAX_FILES) {
+        setCloseAttachmentValidation("You can attach up to 10 files per close case.", "สามารถแนบไฟล์ได้สูงสุด 10 ไฟล์ต่อการปิดเคส");
+        return;
+      }
+      const invalidType = files.find(file => {
+        const extension = updateFileExtension(file.name);
+        return UPDATE_BLOCKED_EXTENSIONS.has(extension) || !UPDATE_ALLOWED_EXTENSIONS.has(extension);
+      });
+      if (invalidType) {
+        setCloseAttachmentValidation("This file type is not allowed.", `ไม่รองรับไฟล์ ${invalidType.name}`);
+        return;
+      }
+      const oversized = files.find(file => Number(file.size) > UPDATE_MAX_FILE_SIZE);
+      if (oversized) {
+        setCloseAttachmentValidation("The file size must not exceed 20 MB.", `ขนาดไฟล์ ${oversized.name} ต้องไม่เกิน 20 MB`);
+        return;
+      }
+      const queuedAt = Date.now();
+      files.forEach((file, index) => closeAttachmentQueue.push({
+        queueId: `CLOSE-${queuedAt}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        fileName: updateStoredFileName(file.name),
+        originalFileName: file.name,
+        fileSize: Number(file.size) || 0,
+        mimeType: file.type || "application/octet-stream",
+        status: "Ready"
+      }));
+      renderCloseAttachmentQueue();
+    }
+
+    function removeCloseAttachment(queueId) {
+      closeAttachmentQueue = closeAttachmentQueue.filter(item => item.queueId !== queueId);
+      setCloseAttachmentValidation();
+      renderCloseAttachmentQueue();
+    }
+
+    function resetCloseAttachments() {
+      closeAttachmentQueue = [];
+      const input = document.querySelector("#closeAttachmentInput");
+      if (input) input.value = "";
+      setCloseAttachmentValidation();
+      renderCloseAttachmentQueue();
+    }
+
+    function syncCloseRecipientEmail(force = false) {
+      const form = document.querySelector("#closeCaseForm");
+      const emailInput = document.querySelector("#closeToEmail");
+      if (!form || !emailInput) return;
+      const toValue = String(form.elements.to?.value || "").trim();
+      const linkedEmail = updateEmailPattern(toValue) ? toValue.toLowerCase() : emailForPerson(toValue);
+      if (force || emailInput.dataset.linkedTo !== toValue) {
+        emailInput.value = linkedEmail;
+        emailInput.dataset.linkedTo = toValue;
+      }
     }
 
     function updateCcDirectoryOptions() {
@@ -14855,8 +14977,8 @@ Tracking Contracts System</div>
       if (!required) setAttachmentValidation();
     }
 
-    function prepareUploadedAttachments({ contractId, logId, action, updatedBy, uploadedAt }) {
-      return updateAttachmentQueue.map((item, index) => ({
+    function prepareUploadedAttachments({ contractId, logId, action, updatedBy, uploadedAt, items = updateAttachmentQueue }) {
+      return items.map((item, index) => ({
         fileId: `FILE-${Date.now()}-${String(index + 1).padStart(2, "0")}`,
         fileName: item.fileName,
         originalFileName: item.originalFileName,
@@ -14986,6 +15108,36 @@ Tracking Contracts System</div>
           const row = logRecords.find(item => item[0] === metaButton.dataset.contractId && String(item[1]) === String(metaButton.dataset.logNo));
           if (row) openLogMetaDetail(row, metaButton.dataset.logMeta);
         }
+      });
+    }
+
+    function setupCloseCaseEmail() {
+      renderCloseAttachmentQueue();
+      const fileInput = document.querySelector("#closeAttachmentInput");
+      const attachButton = document.querySelector("#closeAttachFilesBtn");
+      const dropzone = document.querySelector("#closeAttachmentDropzone");
+      attachButton?.addEventListener("click", () => fileInput?.click());
+      fileInput?.addEventListener("change", event => {
+        addFilesToCloseQueue(event.currentTarget.files);
+        event.currentTarget.value = "";
+      });
+      ["dragenter", "dragover"].forEach(type => dropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropzone.classList.add("is-dragover");
+      }));
+      ["dragleave", "drop"].forEach(type => dropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropzone.classList.remove("is-dragover");
+      }));
+      dropzone?.addEventListener("drop", event => addFilesToCloseQueue(event.dataTransfer?.files));
+      document.addEventListener("click", event => {
+        const removeAttachment = event.target.closest("[data-remove-close-attachment]");
+        if (!removeAttachment) return;
+        event.preventDefault();
+        event.stopPropagation();
+        removeCloseAttachment(removeAttachment.dataset.removeCloseAttachment);
       });
     }
 
@@ -15432,10 +15584,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!endpoint) {
         throw new Error("Missing Apps Script Web App URL. Deploy the Apps Script and paste the URL into ATTACHMENT_UPLOAD_ENDPOINT.");
       }
-      updateAttachmentQueue.forEach(item => {
+      const emailAttachmentQueue = draft.source === "close-case" ? closeAttachmentQueue : updateAttachmentQueue;
+      emailAttachmentQueue.forEach(item => {
         item.status = "Sending email";
       });
-      renderUpdateAttachmentQueue();
+      if (draft.source === "close-case") renderCloseAttachmentQueue();
+      else renderUpdateAttachmentQueue();
       const requestId = `EMAIL-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const attachments = await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload));
       const response = await fetch(endpoint, {
@@ -15464,7 +15618,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         : await response.json().catch(() => ({}));
       if ((response.type !== "opaque" && !response.ok) || !result.success) throw new Error(result.error || "Send email failed");
       (result.files || []).forEach(file => {
-        const match = updateAttachmentQueue.find(item =>
+        const match = emailAttachmentQueue.find(item =>
+          item.fileName === file.fileName || item.originalFileName === file.originalFileName
+        ) || (draft.attachments || []).find(item =>
           item.fileName === file.fileName || item.originalFileName === file.originalFileName
         );
         if (!match) return;
@@ -15473,7 +15629,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         match.downloadUrl = file.downloadUrl || match.downloadUrl || "";
         match.status = "Email sent";
       });
-      renderUpdateAttachmentQueue();
+      if (draft.source === "close-case") renderCloseAttachmentQueue();
+      else renderUpdateAttachmentQueue();
       return result;
     }
 
@@ -15587,9 +15744,56 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       };
     }
 
+    function buildCloseCaseEmailDraft({ contract, stage, owner, to, email, attachments = [], closeDate }) {
+      const contractId = String(contract?.id || "").trim();
+      const contractName = String(contract?.name || "").trim();
+      const recipientName = String(to || email || "Team").trim();
+      const closeDateText = formatDateForEmail(closeDate || todayInputValue());
+      const systemUrl = "https://turtletwentythree.github.io/Project-Contract-tracking/";
+      const subject = `[Contract Tracking] Close Case: ${contractId} - ${contractName}`;
+      const body = [
+        `Dear ${recipientName},`,
+        "",
+        `Contract ID: ${contractId}`,
+        `Contract Name: ${contractName}`,
+        `Close Status: ${stage}`,
+        `Final Contract Owner: ${owner || "-"}`,
+        `Close Date: ${closeDateText}`,
+        `System Link: ${systemUrl}`,
+        "",
+        "The contract case has been closed in the Contract Tracking System.",
+        "",
+        `เรียน ${recipientName}`,
+        "",
+        `รหัสสัญญา: ${contractId}`,
+        `ชื่อสัญญา: ${contractName}`,
+        `สถานะการปิดเคส: ${stage}`,
+        `เจ้าของสัญญาสุดท้าย: ${owner || "-"}`,
+        `วันที่ปิดเคส: ${closeDateText}`,
+        `ลิงก์ระบบ: ${systemUrl}`,
+        "",
+        "รายการสัญญาถูกปิดในระบบ Contract Tracking เรียบร้อยแล้ว",
+        "",
+        "Contract Tracking System"
+      ].join("\n");
+      return {
+        to: email || "",
+        cc: "",
+        ccList: [],
+        subject,
+        body,
+        attachments,
+        contractId,
+        action: stage,
+        source: "close-case",
+        emailTitle: "Send Close Case Email"
+      };
+    }
+
     function openStatusEmailPopup(draft) {
       const modal = document.querySelector("#statusEmailModal");
       if (!modal) return;
+      document.querySelector("#statusEmailTitle").textContent = draft.emailTitle || "Send Status Update Email";
       document.querySelector("#statusEmailTo").value = draft.to || "";
       statusEmailCcRecipients = statusEmailCcItemsFrom(draft.ccList || draft.cc || "");
       document.querySelector("#statusEmailSubject").value = draft.subject || "";
@@ -15653,6 +15857,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           button.textContent = "Sending...";
         }
         const result = await sendStatusEmailViaEndpoint(draft);
+        saveContractsDatabase();
         showToast(`Status update email sent${result.files?.length ? ` with ${result.files.length} cloud attachment link(s)` : ""}.`);
         closeStatusEmailPopup();
       } catch (error) {
@@ -17005,6 +17210,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         ariaLabel: "Sub Type of Contract / ประเภทย่อยของสัญญา"
       });
       attachEditableDropdown("updateTo", () => directoryEmployeeOptions(), () => syncUpdateRecipientEmail(true));
+      attachEditableDropdown("closeTo", () => directoryEmployeeOptions(), () => syncCloseRecipientEmail(true));
 
       document.addEventListener("click", event => {
         editableDropdownRegistry.forEach((state, inputId) => {
@@ -17655,7 +17861,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         if (force || boundId !== closeContract.id) {
           closeForm.elements.owner.value = closeContract.owner || "";
           closeForm.elements.closeDate.value = todayInputValue();
+          closeForm.elements.to.value = closeContract.owner || "";
           closeForm.dataset.boundContractId = closeContract.id;
+          syncCloseRecipientEmail(true);
         }
       }
     }
@@ -19624,7 +19832,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       resetUpdateCcRecipients();
     });
 
-    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
+    document.querySelector("#closeCaseForm").addEventListener("submit", async event => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
       const id = form.get("contractId");
@@ -19633,6 +19841,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const owner = String(form.get("owner") || contract.owner || "").trim();
       const closeDate = String(form.get("closeDate") || todayInputValue());
       const stage = form.get("stage");
+      const to = String(form.get("to") || "").trim();
+      syncCloseRecipientEmail(true);
+      const toEmail = String(document.querySelector("#closeToEmail")?.value || "").trim();
+      if (!toEmail) {
+        document.querySelector("#closeTo")?.focus();
+        showToast("Select a recipient with a valid email. / กรุณาเลือกผู้รับที่มีอีเมลถูกต้อง");
+        return;
+      }
       const alert = calculateAlert(stage, 0, 0);
       contract.stage = stage;
       contract.owner = owner;
@@ -19641,6 +19857,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.station = `From ${owner} >> To ${owner}`;
       contract.days = 0;
       contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
+      const updatedAt = localIsoDateTime();
+      const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
+      const logId = `LOG-${id.replace(/\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
+      const uploadedAttachments = prepareUploadedAttachments({
+        contractId: id,
+        logId,
+        action: stage,
+        updatedBy: currentUser.name || "Current User",
+        uploadedAt: updatedAt,
+        items: closeAttachmentQueue
+      });
       addLogRecord({
         contractId: id,
         cycle: contract.cycle,
@@ -19651,7 +19878,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: closeDate,
         sla: 0,
         delayReason: "",
-        action: stage
+        action: stage,
+        attachments: uploadedAttachments,
+        updatedBy: currentUser.name || "Current User",
+        updatedAt
       });
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === id);
@@ -19660,7 +19890,18 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       saveContractsDatabase();
       renderAll();
       setView("user");
-      showToast(`${id} closed`);
+      const emailDraft = buildCloseCaseEmailDraft({
+        contract,
+        stage,
+        owner,
+        to,
+        email: toEmail,
+        attachments: uploadedAttachments,
+        closeDate
+      });
+      showToast(`${id} closed · Email popup opened`);
+      openStatusEmailPopup(emailDraft);
+      resetCloseAttachments();
     });
 
     ["updateContract", "closeContract", "adjustDueContract"].forEach(id => {
@@ -19697,6 +19938,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncUpdateRecipientEmail(true);
       validateUpdateCcRecipients();
     });
+    document.querySelector("#closeTo")?.addEventListener("input", () => syncCloseRecipientEmail(true));
+    document.querySelector("#closeTo")?.addEventListener("change", () => syncCloseRecipientEmail(true));
     document.querySelector("#closeUpdateReasonAlertModal")?.addEventListener("click", () => closeUpdateReasonAlertPopup(true));
     document.querySelector("#goToUpdateReasonBtn")?.addEventListener("click", () => closeUpdateReasonAlertPopup(true));
     document.querySelector("#updateReasonAlertModal")?.addEventListener("click", event => {
@@ -19940,6 +20183,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         return [
           ["Contract", selectedOptionText(field("contractId")), true],
           ["Close Status", selectedOptionText(field("stage"))],
+          ["To / ส่งถึง", value("to")],
+          ["Attachments / ไฟล์แนบ", `${closeAttachmentQueue.length} file${closeAttachmentQueue.length === 1 ? "" : "s"}`],
           ["Final Contract Owner", value("owner")],
           ["Close Date", formatConfirmationDate(field("closeDate")?.value)]
         ];
