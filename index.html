@@ -5639,6 +5639,67 @@
       font-size: 8px;
     }
 
+    .log-action-detail-button {
+      border: 0;
+      border-bottom: 1px solid currentColor;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 750;
+      line-height: 1.35;
+      padding: 1px 0;
+      text-align: left;
+    }
+
+    .log-action-detail-button:hover,
+    .log-action-detail-button:focus-visible {
+      color: var(--t23-orange);
+    }
+
+    #logActionReasonModal {
+      z-index: 40;
+    }
+
+    .log-action-reason-modal {
+      width: min(680px, 100%);
+    }
+
+    .log-action-reason-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .log-action-reason-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 34%) minmax(0, 1fr);
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .log-action-reason-row:last-child {
+      border-bottom: 0;
+    }
+
+    .log-action-reason-label,
+    .log-action-reason-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .log-action-reason-label span,
+    .log-action-reason-value span {
+      display: block;
+    }
+
+    .log-action-reason-label span:last-child,
+    .log-action-reason-value span:last-child {
+      color: var(--muted);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
     .log-meta-empty {
       color: var(--muted);
       font-size: 9px;
@@ -5677,6 +5738,7 @@
       .attachment-row { grid-template-columns: minmax(0, 1fr) auto; }
       .attachment-file-status { grid-column: 1; }
       .attachment-remove { grid-column: 2; grid-row: 1 / span 2; }
+      .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
     }
 
 
@@ -8003,6 +8065,19 @@
         <button class="icon-button" id="closeStationOwnerModal" title="Close">×</button>
       </header>
       <div class="modal-body" id="stationOwnerBody"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="logActionReasonModal" aria-hidden="true">
+    <section class="modal log-action-reason-modal" role="dialog" aria-modal="true" aria-labelledby="logActionReasonTitle">
+      <header class="modal-header">
+        <div>
+          <h2 id="logActionReasonTitle">Action Reason</h2>
+          <p id="logActionReasonSubtitle">เหตุผลของสถานะ</p>
+        </div>
+        <button class="icon-button" id="closeLogActionReasonModal" title="Close" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body" id="logActionReasonBody"></div>
     </section>
   </div>
 
@@ -13759,7 +13834,7 @@
                     <td>${escapeHtml(row[9])}</td>
                     <td>${alertBadge(row[10])}</td>
                     <td>${escapeHtml(row[11] || "-")}</td>
-                    <td>${escapeHtml(row[12] || "-")}</td>
+                    <td>${renderLogActionButton(row)}</td>
                   </tr>`).join("") : `<tr><td colspan="11">No Log View Detail found.</td></tr>`}
               </tbody>
             </table>
@@ -14331,6 +14406,56 @@
       return [type, conditions].filter(Boolean).join(conditions ? ": " : "") || "-";
     }
 
+    function renderLogActionButton(row) {
+      const action = String(row?.[12] || row?.[25] || "-").trim() || "-";
+      return `<button class="log-action-detail-button" type="button" data-log-action-detail data-contract-id="${escapeHtml(row?.[0] || "")}" data-log-no="${escapeHtml(row?.[1] || "")}" title="View reason / ดูเหตุผล">${escapeHtml(action)}</button>`;
+    }
+
+    function closeLogActionReasonDetail() {
+      const modal = document.querySelector("#logActionReasonModal");
+      if (!modal) return;
+      modal.classList.remove("show");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    function openLogActionReasonDetail(row) {
+      const modal = document.querySelector("#logActionReasonModal");
+      const subtitle = document.querySelector("#logActionReasonSubtitle");
+      const body = document.querySelector("#logActionReasonBody");
+      if (!modal || !subtitle || !body || !row) return;
+
+      const actionEn = row[25] || row[12] || "-";
+      const actionTh = row[24] || "-";
+      const descriptionEn = row[27] || "";
+      const descriptionTh = row[26] || "";
+      const reasonTypeEn = row[30] || row[16] || "";
+      const reasonTypeTh = row[29] || "";
+      const reasonDetail = row[17] || row[13] || row[11] || "";
+      const approval = logApprovalText(row);
+      const correctiveAction = row[20] || row[15] || "";
+      const actionSla = row[28] || row[8] || "-";
+      const detailRows = [
+        ["Status", "สถานะ", actionEn, actionTh],
+        ["Description", "คำอธิบาย", descriptionEn, descriptionTh],
+        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
+        ["Reason", "เหตุผล", reasonDetail, ""],
+        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],
+        ["Approval", "การอนุมัติ", approval === "-" ? "" : approval, ""],
+        ["Corrective Action", "การแก้ไข", correctiveAction, ""],
+        ["SLA", "ระยะเวลาดำเนินการ", actionSla, ""],
+        ["Updated By", "ผู้บันทึก", row[21] || "", row[22] ? formatDateTime(row[22]) : ""]
+      ].filter(([, , primary, secondary]) => String(primary || "").trim() || String(secondary || "").trim());
+
+      subtitle.textContent = `${row[0]} · Log ${row[1]} · Cycle ${row[2]}`;
+      body.innerHTML = `<div class="detail-section"><div class="log-action-reason-grid">${detailRows.length ? detailRows.map(([labelEn, labelTh, valueEn, valueTh]) => `
+        <div class="log-action-reason-row">
+          <div class="log-action-reason-label"><strong>${escapeHtml(labelEn)}</strong><span>${escapeHtml(labelTh)}</span></div>
+          <div class="log-action-reason-value"><strong>${escapeHtml(valueEn || "-")}</strong>${valueTh ? `<span>${escapeHtml(valueTh)}</span>` : ""}</div>
+        </div>`).join("") : `<p class="muted">No reason recorded.<br>ไม่มีการบันทึกเหตุผล</p>`}</div></div>`;
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+    }
+
     function formatDateTime(value) {
       if (!value) return "-";
       const date = new Date(value);
@@ -14368,14 +14493,15 @@
             <td>${row[9]}</td>
             <td>${alertBadge(row[10])}</td>
             <td>${escapeHtml(row[11] || "-")}</td>
-            <td>${escapeHtml(row[12] || "-")}</td>
+            <td>${renderLogActionButton(row)}</td>
           </tr>`).join("") : `<tr><td colspan="11">No log for selected Contract ID</td></tr>`;
       bindLogRowClicks("#logViewRows");
     }
 
     function bindLogRowClicks(scopeSelector) {
       document.querySelectorAll(`${scopeSelector} .log-view-row`).forEach(row => {
-        row.addEventListener("click", () => {
+        row.addEventListener("click", event => {
+          if (event.target.closest("button, a")) return;
           const logRow = logRecords.find(item => item[0] === row.dataset.contractId && String(item[1]) === String(row.dataset.logNo));
           if (!logRow) return;
           openStationOwnerDetail(logRow[3], logRow[0], logRow[1]);
@@ -15090,6 +15216,14 @@ Tracking Contracts System</div>
       ccInput?.addEventListener("input", () => setCcValidation());
 
       document.addEventListener("click", event => {
+        const actionDetailButton = event.target.closest("[data-log-action-detail]");
+        if (actionDetailButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          const row = logRecords.find(item => item[0] === actionDetailButton.dataset.contractId && String(item[1]) === String(actionDetailButton.dataset.logNo));
+          if (row) openLogActionReasonDetail(row);
+          return;
+        }
         const removeAttachment = event.target.closest("[data-remove-update-attachment]");
         if (removeAttachment) {
           event.preventDefault();
@@ -20078,8 +20212,13 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     document.querySelector("#stationOwnerModal").addEventListener("click", event => {
       if (event.target.id === "stationOwnerModal") closeStationOwnerDetail();
     });
+    document.querySelector("#closeLogActionReasonModal").addEventListener("click", closeLogActionReasonDetail);
+    document.querySelector("#logActionReasonModal").addEventListener("click", event => {
+      if (event.target.id === "logActionReasonModal") closeLogActionReasonDetail();
+    });
     document.addEventListener("keydown", event => {
       if (event.key === "Escape") {
+        closeLogActionReasonDetail();
         closeStationOwnerDetail();
         closeStatusEmailPopup();
         closeDueApprovalEmailPopup();
