@@ -13112,6 +13112,7 @@
       loadContractsDatabase();
       renderAll();
       loadDriveDatabaseFromCloud();
+      startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
     }
 
@@ -17884,6 +17885,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
     let driveDatabaseSaveTimer = 0;
     let isApplyingDriveDatabaseLoad = false;
+    let isDriveDatabaseSaveInProgress = false;
+    let driveDatabaseSaveQueued = false;
+    let driveDatabaseRefreshTimer = 0;
+    let lastDriveDatabaseRefreshAt = 0;
+    let driveDatabaseActiveLoads = 0;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -18107,7 +18113,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return idMap.size;
     }
 
-    function saveContractsDatabase() {
+    function saveContractsDatabase(options = {}) {
       try {
         localStorage.setItem(localDatabaseKey, JSON.stringify({
           savedAt: localIsoDateTime(),
@@ -18120,7 +18126,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           masterData
         }));
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally`);
-        scheduleDriveDatabaseSave();
+        if (options.syncCloud !== false) scheduleDriveDatabaseSave();
       } catch (error) {
         updateDatabaseSyncStatus("Local database not saved");
       }
@@ -18167,7 +18173,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         });
         contracts.splice(0, contracts.length, ...parsedContracts);
         if (Array.isArray(parsed.logRecords)) logRecords.splice(0, logRecords.length, ...parsedLogs);
-        if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase();
+        if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase({ syncCloud: false });
         refreshDashboardDataFromContracts();
         updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       } catch (error) {
@@ -18225,7 +18231,29 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      };
 	    }
 
-    function applyDriveDatabasePayload(payload) {
+    function databaseTextFingerprint(text) {
+      const source = String(text || "");
+      let hash = 2166136261;
+      for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return `${source.length}:${(hash >>> 0).toString(16)}`;
+    }
+
+    function driveDatabasePayloadFingerprint(payload) {
+      return [
+        "contractsCsvText",
+        "logsCsvText",
+        "typeMasterCsvText",
+        "departmentMasterCsvText",
+        "peopleMasterCsvText",
+        "contractTemplateCsvText",
+        "actionSlaCsvText"
+      ].map(key => databaseTextFingerprint(payload?.[key] || "")).join("|");
+    }
+
+    function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
@@ -18234,6 +18262,18 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      const peopleMasterText = payload.peopleMasterCsvText || payload.files?.people?.text || "";
 	      const contractTemplateText = payload.contractTemplateCsvText || payload.files?.contractTemplates?.text || "";
 	      const actionSlaText = payload.actionSlaCsvText || payload.files?.actionSla?.text || "";
+	      if (options.expectedFingerprint) {
+	        const receivedFingerprint = driveDatabasePayloadFingerprint({
+	          contractsCsvText: contractText,
+	          logsCsvText: logText,
+	          typeMasterCsvText: typeMasterText,
+	          departmentMasterCsvText: departmentMasterText,
+	          peopleMasterCsvText: peopleMasterText,
+	          contractTemplateCsvText: contractTemplateText,
+	          actionSlaCsvText: actionSlaText
+	        });
+	        if (receivedFingerprint !== options.expectedFingerprint) return false;
+	      }
 	      if (typeMasterText) masterData.contractTypes = csvToObjects(typeMasterText);
 	      if (departmentMasterText) masterData.departments = csvToObjects(departmentMasterText);
 	      if (peopleMasterText) masterData.people = csvToObjects(peopleMasterText);
@@ -18268,9 +18308,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return true;
     }
 
-    function loadDriveDatabaseFromCloud() {
+    function loadDriveDatabaseFromCloud(options = {}) {
       const endpoint = driveDatabaseEndpoint();
-      if (!endpoint) return;
+      if (!endpoint) return Promise.resolve(false);
+      const silent = Boolean(options.silent);
+      if (driveDatabaseActiveLoads && !options.expectedFingerprint) return Promise.resolve(false);
+      driveDatabaseActiveLoads += 1;
       const callbackName = `t23DriveDb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const params = new URLSearchParams({
         mode: "loadDriveDatabase",
@@ -18282,33 +18325,57 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        peopleMasterCsv: driveDatabaseConfig.peopleMasterCsv,
 	        contractTemplateCsv: driveDatabaseConfig.contractTemplateCsv,
 	        actionSlaCsv: driveDatabaseConfig.actionSlaCsv,
-	        callback: callbackName
+	        callback: callbackName,
+	        cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
 	      });
-      const script = document.createElement("script");
-      let done = false;
-      window[callbackName] = payload => {
-        done = true;
-        try {
-          if (!applyDriveDatabasePayload(payload)) updateDatabaseSyncStatus("Shared Drive database is empty");
-        } catch (error) {
-          updateDatabaseSyncStatus("Shared Drive database could not load");
-        } finally {
+      return new Promise(resolve => {
+        const script = document.createElement("script");
+        let done = false;
+        const finish = success => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timeoutId);
           delete window[callbackName];
           script.remove();
-        }
-      };
-      script.onerror = () => {
-        if (!done) updateDatabaseSyncStatus("Shared Drive database could not load");
-        delete window[callbackName];
-        script.remove();
-      };
-      script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
-      document.head.appendChild(script);
+          driveDatabaseActiveLoads = Math.max(0, driveDatabaseActiveLoads - 1);
+          if (success) lastDriveDatabaseRefreshAt = Date.now();
+          resolve(success);
+        };
+        const timeoutId = window.setTimeout(() => {
+          if (!silent) updateDatabaseSyncStatus("Shared Drive database load timed out");
+          finish(false);
+        }, 15000);
+        window[callbackName] = payload => {
+          try {
+            const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "" });
+            if (!applied && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
+            finish(applied);
+          } catch (error) {
+            if (!silent) updateDatabaseSyncStatus("Shared Drive database could not load");
+            finish(false);
+          }
+        };
+        script.onerror = () => {
+          if (!silent) updateDatabaseSyncStatus("Shared Drive database could not load");
+          finish(false);
+        };
+        script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+        document.head.appendChild(script);
+      });
     }
 
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return;
+      if (isDriveDatabaseSaveInProgress) {
+        driveDatabaseSaveQueued = true;
+        return;
+      }
+      window.clearTimeout(driveDatabaseSaveTimer);
+      driveDatabaseSaveTimer = 0;
+      isDriveDatabaseSaveInProgress = true;
+      const payload = driveDatabaseCsvPayload();
+      const expectedFingerprint = driveDatabasePayloadFingerprint(payload);
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
         await fetch(endpoint, {
@@ -18316,18 +18383,55 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           mode: "no-cors",
           redirect: "follow",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(driveDatabaseCsvPayload())
+          body: JSON.stringify(payload)
         });
-        updateDatabaseSyncStatus(`${contracts.length} contracts saved to Shared Drive`);
+        const retryDelays = [500, 1000, 1800, 3000];
+        let verified = false;
+        for (const delayMs of retryDelays) {
+          await new Promise(resolve => window.setTimeout(resolve, delayMs));
+          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint });
+          if (verified) break;
+        }
+        updateDatabaseSyncStatus(verified
+          ? `${contracts.length} contracts saved and refreshed from Shared Drive`
+          : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
+      } finally {
+        isDriveDatabaseSaveInProgress = false;
+        if (driveDatabaseSaveQueued) {
+          driveDatabaseSaveQueued = false;
+          scheduleDriveDatabaseSave();
+        }
       }
     }
 
     function scheduleDriveDatabaseSave() {
       if (isApplyingDriveDatabaseLoad) return;
+      if (isDriveDatabaseSaveInProgress) {
+        driveDatabaseSaveQueued = true;
+        return;
+      }
       clearTimeout(driveDatabaseSaveTimer);
       driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 800);
+    }
+
+    function refreshDriveDatabaseIfActive() {
+      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (Date.now() - lastDriveDatabaseRefreshAt < 5000) return;
+      loadDriveDatabaseFromCloud({ silent: true });
+    }
+
+    function startDriveDatabaseAutoRefresh() {
+      window.clearInterval(driveDatabaseRefreshTimer);
+      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 15000);
+      if (!document.body.dataset.driveRefreshBound) {
+        document.body.dataset.driveRefreshBound = "true";
+        window.addEventListener("focus", refreshDriveDatabaseIfActive);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) refreshDriveDatabaseIfActive();
+        });
+      }
     }
 
     function exportContractsCsv() {
