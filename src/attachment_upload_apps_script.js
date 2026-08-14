@@ -4,15 +4,25 @@ const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {
+  let requestId = "";
   try {
-    const payload = JSON.parse((e.postData && e.postData.contents) || "{}");
+    const rawPayload = (e.postData && e.postData.contents) || (e.parameter && e.parameter.payload) || "{}";
+    const payload = JSON.parse(rawPayload);
+    requestId = String(payload.requestId || "").trim();
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
-    if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
+    if (mode === "sendStatusEmail") {
+      setEmailRequestStatus_(requestId, { success: true, state: "processing" });
+      const result = sendStatusEmail_(payload);
+      setEmailRequestStatus_(requestId, Object.assign({ state: "sent" }, result));
+      return jsonResponse(result);
+    }
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
     if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
     return jsonResponse({ success: true, files: [saveAttachment_(payload)] });
   } catch (error) {
+    setEmailRequestStatus_(requestId, { success: false, state: "failed", error: errorMessage_(error) });
+    console.error("T23 doPost failed: " + errorMessage_(error));
     return jsonResponse({ success: false, error: errorMessage_(error) });
   }
 }
@@ -22,6 +32,8 @@ function doGet(e) {
   const callback = String(params.callback || "").trim();
   try {
     if (params.mode === "loadDriveDatabase") return jsonpResponse(loadDriveDatabase_(params), callback);
+    if (params.mode === "emailRequestStatus") return jsonpResponse(emailRequestStatus_(params.requestId), callback);
+    if (params.mode === "healthCheck") return jsonpResponse(endpointHealthCheck_(), callback);
     return jsonpResponse({
       success: true,
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
@@ -32,6 +44,31 @@ function doGet(e) {
   } catch (error) {
     return jsonpResponse({ success: false, error: errorMessage_(error) }, callback);
   }
+}
+
+function emailRequestStatus_(requestId) {
+  const id = String(requestId || "").trim();
+  if (!id) return { success: false, state: "failed", error: "Missing request ID." };
+  const cached = CacheService.getScriptCache().get("t23_email_" + id);
+  return cached ? JSON.parse(cached) : { success: true, state: "pending" };
+}
+
+function setEmailRequestStatus_(requestId, status) {
+  const id = String(requestId || "").trim();
+  if (!id) return;
+  CacheService.getScriptCache().put("t23_email_" + id, JSON.stringify(status || {}), 600);
+}
+
+function endpointHealthCheck_() {
+  const attachmentFolder = DriveApp.getFolderById(DEFAULT_FOLDER_ID);
+  return {
+    success: true,
+    state: "ready",
+    attachmentFolderId: attachmentFolder.getId(),
+    attachmentFolderName: attachmentFolder.getName(),
+    remainingMailQuota: MailApp.getRemainingDailyQuota(),
+    checkedAt: new Date().toISOString()
+  };
 }
 
 function loadDriveDatabase_(params) {
@@ -146,7 +183,7 @@ function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, pref
   const sourceFile = files.next();
   const backupName = cleanFileName_([prefix, stamp, name].join("_"));
   const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
-  backupFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  applyBestEffortFileSharing_(backupFile);
   return {
     id: backupFile.getId(),
     sourceName: name,
@@ -163,7 +200,7 @@ function upsertTextFileByName_(folder, fileName, text) {
   const file = files.hasNext()
     ? files.next().setContent(content)
     : folder.createFile(name, content, MimeType.CSV);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  applyBestEffortFileSharing_(file);
   return {
     id: file.getId(),
     name: file.getName(),
@@ -195,7 +232,7 @@ function sendStatusEmail_(payload) {
   if (mailAttachments.length) options.attachments = mailAttachments;
 
   MailApp.sendEmail(options);
-  return jsonResponse({
+  return {
     success: true,
     sent: true,
     sentAt: new Date().toISOString(),
@@ -203,7 +240,7 @@ function sendStatusEmail_(payload) {
     cc: cc,
     files: files,
     attachedFiles: mailAttachments.map(function(blob) { return blob.getName(); })
-  });
+  };
 }
 
 function normalizeCc_(value) {
@@ -276,7 +313,7 @@ function saveAttachment_(payload) {
   const mimeType = payload.mimeType || "application/octet-stream";
   const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  applyBestEffortFileSharing_(file);
   return {
     id: file.getId(),
     fileName: file.getName(),
@@ -287,6 +324,21 @@ function saveAttachment_(payload) {
     downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId(),
     reused: false
   };
+}
+
+function applyBestEffortFileSharing_(file) {
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return "anyone";
+  } catch (publicSharingError) {
+    try {
+      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+      return "domain";
+    } catch (domainSharingError) {
+      console.warn("File created without changing sharing policy: " + errorMessage_(domainSharingError));
+      return "existing";
+    }
+  }
 }
 
 function buildEmailBody_(baseBody, files, folderUrl) {
