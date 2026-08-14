@@ -51,23 +51,29 @@ function loadDriveDatabase_(params) {
 }
 
 function saveDriveDatabase_(payload) {
-  const folder = DriveApp.getFolderById(payload.folderId || DEFAULT_FOLDER_ID);
-  const files = {
-    contracts: upsertTextFileByName_(folder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", payload.contractsCsvText || ""),
-    logs: upsertTextFileByName_(folder, payload.logsCsv || "tracking_contracts_log_db.csv", payload.logsCsvText || ""),
-    typeMaster: upsertTextFileByName_(folder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", payload.typeMasterCsvText || ""),
-	    departments: upsertTextFileByName_(folder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", payload.departmentMasterCsvText || ""),
-	    people: upsertTextFileByName_(folder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", payload.peopleMasterCsvText || ""),
-	    contractTemplates: upsertTextFileByName_(folder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", payload.contractTemplateCsvText || ""),
-	    actionSla: upsertTextFileByName_(folder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", payload.actionSlaCsvText || "")
-  };
-  return jsonResponse({
-    success: true,
-    saved: true,
-    savedAt: new Date().toISOString(),
-    folderId: folder.getId(),
-    files: files
-  });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const folder = DriveApp.getFolderById(payload.folderId || DEFAULT_FOLDER_ID);
+    const files = {
+      contracts: upsertTextFileByName_(folder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", payload.contractsCsvText || ""),
+      logs: upsertTextFileByName_(folder, payload.logsCsv || "tracking_contracts_log_db.csv", payload.logsCsvText || ""),
+      typeMaster: upsertTextFileByName_(folder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", payload.typeMasterCsvText || ""),
+	      departments: upsertTextFileByName_(folder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", payload.departmentMasterCsvText || ""),
+	      people: upsertTextFileByName_(folder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", payload.peopleMasterCsvText || ""),
+	      contractTemplates: upsertTextFileByName_(folder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", payload.contractTemplateCsvText || ""),
+	      actionSla: upsertTextFileByName_(folder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", payload.actionSlaCsvText || "")
+    };
+    return jsonResponse({
+      success: true,
+      saved: true,
+      savedAt: new Date().toISOString(),
+      folderId: folder.getId(),
+      files: files
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function backupDriveDatabase_(payload) {
