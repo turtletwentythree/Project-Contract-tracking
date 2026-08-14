@@ -15344,6 +15344,89 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return attachment;
     }
 
+    function waitForEmailRequestStatus(endpoint, requestId, timeoutMs = 120000) {
+      return new Promise((resolve, reject) => {
+        const startedAt = Date.now();
+        const poll = () => {
+          const callbackName = `t23EmailStatus_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          const script = document.createElement("script");
+          let finished = false;
+          const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(loadTimer);
+            delete window[callbackName];
+            script.remove();
+          };
+          const retry = () => {
+            cleanup();
+            if (Date.now() - startedAt >= timeoutMs) {
+              reject(new Error("Email confirmation timed out. Check Apps Script Executions before sending again. / ไม่ได้รับผลยืนยันการส่งอีเมล กรุณาตรวจสอบ Apps Script ก่อนส่งซ้ำ"));
+              return;
+            }
+            window.setTimeout(poll, 1000);
+          };
+          const loadTimer = window.setTimeout(retry, 12000);
+          window[callbackName] = payload => {
+            const state = String(payload?.state || "pending");
+            cleanup();
+            if (state === "sent" && payload?.success) {
+              resolve(payload);
+              return;
+            }
+            if (state === "failed" || payload?.success === false) {
+              reject(new Error(payload?.error || "Send email failed. / ส่งอีเมลไม่สำเร็จ"));
+              return;
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+              reject(new Error("Email confirmation timed out. Check Apps Script Executions before sending again. / ไม่ได้รับผลยืนยันการส่งอีเมล กรุณาตรวจสอบ Apps Script ก่อนส่งซ้ำ"));
+              return;
+            }
+            window.setTimeout(poll, 1000);
+          };
+          script.onerror = retry;
+          const params = new URLSearchParams({
+            mode: "emailRequestStatus",
+            requestId,
+            callback: callbackName,
+            cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
+          });
+          script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+          document.head.appendChild(script);
+        };
+        poll();
+      });
+    }
+
+    function checkEmailEndpointHealth() {
+      const endpoint = configuredAttachmentUploadEndpoint();
+      if (!endpoint) return Promise.resolve({ success: false, state: "not-configured" });
+      return new Promise(resolve => {
+        const callbackName = `t23EmailHealth_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const script = document.createElement("script");
+        let finished = false;
+        const finish = payload => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          delete window[callbackName];
+          script.remove();
+          window.__t23EmailHealth = payload;
+          resolve(payload);
+        };
+        const timer = window.setTimeout(() => finish({ success: false, state: "timeout" }), 15000);
+        window[callbackName] = payload => finish(payload || { success: false, state: "invalid-response" });
+        script.onerror = () => finish({ success: false, state: "network-error" });
+        const params = new URLSearchParams({
+          mode: "healthCheck",
+          callback: callbackName,
+          cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
+        });
+        script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+        document.head.appendChild(script);
+      });
+    }
+
     async function sendStatusEmailViaEndpoint(draft) {
       const endpoint = ensureAttachmentUploadEndpoint();
       if (!endpoint) {
@@ -15353,6 +15436,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         item.status = "Sending email";
       });
       renderUpdateAttachmentQueue();
+      const requestId = `EMAIL-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const attachments = await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload));
       const response = await fetch(endpoint, {
         method: "POST",
         mode: "no-cors",
@@ -15360,6 +15445,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           mode: "sendStatusEmail",
+          requestId,
           folderId: attachmentCloudConfig.folderId,
           folderUrl: attachmentCloudConfig.folderUrl,
           to: draft.to,
@@ -15367,28 +15453,16 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           ...(draft.cc ? { ccText: draft.cc } : {}),
           subject: draft.subject,
           body: draft.body,
-          attachments: await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload)),
+          attachments,
           contractId: draft.contractId || "",
           action: draft.action || "",
           sentFrom: "T23 Contract Tracking"
         })
       });
-      if (response.type === "opaque") {
-        updateAttachmentQueue.forEach(item => {
-          item.status = "Email sent";
-        });
-        renderUpdateAttachmentQueue();
-        return {
-          success: true,
-          sent: true,
-          files: (draft.attachments || []).map(item => ({
-            fileName: item.fileName,
-            originalFileName: item.originalFileName
-          }))
-        };
-      }
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) throw new Error(result.error || "Send email failed");
+      const result = response.type === "opaque"
+        ? await waitForEmailRequestStatus(endpoint, requestId)
+        : await response.json().catch(() => ({}));
+      if ((response.type !== "opaque" && !response.ok) || !result.success) throw new Error(result.error || "Send email failed");
       (result.files || []).forEach(file => {
         const match = updateAttachmentQueue.find(item =>
           item.fileName === file.fileName || item.originalFileName === file.originalFileName
@@ -20614,6 +20688,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     initializeLoginGateway();
+    checkEmailEndpointHealth();
 
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape") return;
