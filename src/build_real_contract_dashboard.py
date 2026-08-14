@@ -31,9 +31,10 @@ ATTACHMENT_CLOUD_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ"
 ATTACHMENT_CLOUD_FOLDER_URL = f"https://drive.google.com/drive/folders/{ATTACHMENT_CLOUD_FOLDER_ID}"
 ATTACHMENT_CLOUD_FOLDER_NAME = "Attachments Files"
 ATTACHMENT_UPLOAD_ENDPOINT = "https://script.google.com/macros/s/AKfycbzhIbrLVvD-Cwxh3wqEWqjSaIESGgXfhdJ2cWUhepiSIsAyG8yQafG392kkjnSvjT_N/exec"
-RESET_CONTRACT_AND_LOG_DATA = True
+RESET_CONTRACT_AND_LOG_DATA = False
+USE_EXISTING_CSV_DATABASE = True
 ACTIVE_UPDATE_ACTIONS = ["Submit to Review", "Return", "Resubmit", "Forward"]
-STANDARD_SLA_DATA_VERSION = "2026-08-05-sla-config-updated1-v1"
+STANDARD_SLA_DATA_VERSION = "2026-08-14-others-by-classification-v1"
 DEPARTMENT_DATA_VERSION = "2026-07-23-nonzero-departments-v1"
 ACTION_DATA_VERSION = "2026-08-05-sla-config-updated1-v1"
 
@@ -57,7 +58,7 @@ STANDARD_SLA_ADJUSTED_DAYS = {
     ("Confidential", "Commercial Agreement", "Loan Agreement"): "28",
     ("Confidential", "Commercial Agreement", "Mergers and Acquisitions Agreement"): "28",
     ("Confidential", "Commercial Agreement", "Shareholders’ Agreement"): "28",
-    ("Confidential", "", "Others"): "20",
+    ("Confidential", "Others", ""): "20",
 }
 
 ACTION_SLA_ADJUSTED_DAYS = {
@@ -342,6 +343,15 @@ def apply_standard_sla_adjustments(rows):
         if clean(row.get("Type of Contract EN")) == "Service Provider Agreement":
             row["Type of Contract EN"] = "Outsourcing Agreement"
             row["Type of Contract TH"] = "สัญญาจ้าง"
+        if (
+            clean(row.get("Contract Classification EN")) == "Confidential"
+            and not clean(row.get("Type of Contract EN"))
+            and clean(row.get("Sub Type of Contract EN")) == "Others"
+        ):
+            row["Type of Contract EN"] = "Others"
+            row["Type of Contract TH"] = clean(row.get("Sub Type of Contract TH")) or "อื่น ๆ"
+            row["Sub Type of Contract EN"] = ""
+            row["Sub Type of Contract TH"] = ""
         key = (
             clean(row.get("Contract Classification EN")),
             clean(row.get("Type of Contract EN")),
@@ -575,6 +585,58 @@ def write_csv(path, rows, headers):
         writer = csv.DictWriter(handle, fieldnames=headers, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def read_csv_database(path):
+    if not path.exists() or path.stat().st_size == 0:
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def contract_from_csv_row(row):
+    total_sla = number(row.get("Total SLA"), 0)
+    used = number(row.get("Days Used") or row.get("Days on Hand"), 0)
+    return {
+        "id": clean(row.get("Contract ID")),
+        "name": clean(row.get("Contract Name")),
+        "department": clean(row.get("Department / Restaurant")),
+        "owner": clean(row.get("Contract Owner") or row.get("Station Owner")),
+        "type": clean(row.get("Type of Contract") or row.get("Work Type") or "Other"),
+        "vendor": clean(row.get("Vendor / Counter party")),
+        "stage": clean(row.get("Stage") or "Draft Created"),
+        "cycle": number(row.get("Cycle"), 1),
+        "returns": number(row.get("Returns"), 0),
+        "status": clean(row.get("Status Update") or row.get("Alert") or "Green >>G=On Track"),
+        "station": clean(row.get("Station")),
+        "addCaseDate": clean(row.get("Add Case Date")),
+        "due": clean(row.get("Due Date")),
+        "systemDue": clean(row.get("System Due Date")),
+        "workType": clean(row.get("Work Type") or row.get("Type of Contract") or "Other"),
+        "totalSla": total_sla,
+        "used": used,
+        "days": number(row.get("Days on Hand"), used),
+        "balance": number(row.get("Balance"), total_sla - used),
+        "alert": clean(row.get("Alert") or row.get("Status Update") or "Green >>G=On Track"),
+        "remark": clean(row.get("Remark")),
+        "accessLevel": clean(row.get("Access Level") or "Normal"),
+        "visibility": clean(row.get("Visibility")),
+        "category": clean(row.get("Category")),
+    }
+
+
+def log_from_csv_row(row):
+    values = []
+    for header, value in row.items():
+        if header in {"Attachments", "CC Recipients"}:
+            try:
+                parsed = json.loads(value or "[]")
+                values.append(parsed if isinstance(parsed, list) else [])
+            except json.JSONDecodeError:
+                values.append([])
+        else:
+            values.append(value or "")
+    return values
 
 
 def main():
@@ -883,6 +945,13 @@ def main():
     if RESET_CONTRACT_AND_LOG_DATA:
         contracts = []
         log_records = []
+    if USE_EXISTING_CSV_DATABASE:
+        saved_contract_rows = read_csv_database(OUTPUT_CONTRACTS_CSV)
+        saved_log_rows = read_csv_database(OUTPUT_LOGS_CSV)
+        if saved_contract_rows:
+            contracts = [contract_from_csv_row(row) for row in saved_contract_rows]
+        if saved_log_rows:
+            log_records = [log_from_csv_row(row) for row in saved_log_rows]
 
     action_sla = {}
     sla_steps = []
@@ -5252,6 +5321,11 @@ def main():
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
     let driveDatabaseSaveTimer = 0;
     let isApplyingDriveDatabaseLoad = false;
+    let isDriveDatabaseSaveInProgress = false;
+    let driveDatabaseSaveQueued = false;
+    let driveDatabaseRefreshTimer = 0;
+    let lastDriveDatabaseRefreshAt = 0;
+    let driveDatabaseActiveLoads = 0;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -5475,7 +5549,7 @@ def main():
       return idMap.size;
     }
 
-    function saveContractsDatabase() {
+    function saveContractsDatabase(options = {}) {
       try {
         localStorage.setItem(localDatabaseKey, JSON.stringify({
           savedAt: localIsoDateTime(),
@@ -5488,7 +5562,7 @@ def main():
           masterData
         }));
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally`);
-        scheduleDriveDatabaseSave();
+        if (options.syncCloud !== false) scheduleDriveDatabaseSave();
       } catch (error) {
         updateDatabaseSyncStatus("Local database not saved");
       }
@@ -5532,7 +5606,7 @@ def main():
         });
         contracts.splice(0, contracts.length, ...parsedContracts);
         if (Array.isArray(parsed.logRecords)) logRecords.splice(0, logRecords.length, ...parsedLogs);
-        if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase();
+        if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase({ syncCloud: false });
         refreshDashboardDataFromContracts();
         updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       } catch (error) {
@@ -5590,7 +5664,29 @@ def main():
 	      };
 	    }
 
-    function applyDriveDatabasePayload(payload) {
+    function databaseTextFingerprint(text) {
+      const source = String(text || "");
+      let hash = 2166136261;
+      for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return `${source.length}:${(hash >>> 0).toString(16)}`;
+    }
+
+    function driveDatabasePayloadFingerprint(payload) {
+      return [
+        "contractsCsvText",
+        "logsCsvText",
+        "typeMasterCsvText",
+        "departmentMasterCsvText",
+        "peopleMasterCsvText",
+        "contractTemplateCsvText",
+        "actionSlaCsvText"
+      ].map(key => databaseTextFingerprint(payload?.[key] || "")).join("|");
+    }
+
+    function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
@@ -5599,6 +5695,18 @@ def main():
 	      const peopleMasterText = payload.peopleMasterCsvText || payload.files?.people?.text || "";
 	      const contractTemplateText = payload.contractTemplateCsvText || payload.files?.contractTemplates?.text || "";
 	      const actionSlaText = payload.actionSlaCsvText || payload.files?.actionSla?.text || "";
+	      if (options.expectedFingerprint) {
+	        const receivedFingerprint = driveDatabasePayloadFingerprint({
+	          contractsCsvText: contractText,
+	          logsCsvText: logText,
+	          typeMasterCsvText: typeMasterText,
+	          departmentMasterCsvText: departmentMasterText,
+	          peopleMasterCsvText: peopleMasterText,
+	          contractTemplateCsvText: contractTemplateText,
+	          actionSlaCsvText: actionSlaText
+	        });
+	        if (receivedFingerprint !== options.expectedFingerprint) return false;
+	      }
 	      if (typeMasterText) masterData.contractTypes = csvToObjects(typeMasterText);
 	      if (departmentMasterText) masterData.departments = csvToObjects(departmentMasterText);
 	      if (peopleMasterText) masterData.people = csvToObjects(peopleMasterText);
@@ -5633,9 +5741,12 @@ def main():
       return true;
     }
 
-    function loadDriveDatabaseFromCloud() {
+    function loadDriveDatabaseFromCloud(options = {}) {
       const endpoint = driveDatabaseEndpoint();
-      if (!endpoint) return;
+      if (!endpoint) return Promise.resolve(false);
+      const silent = Boolean(options.silent);
+      if (driveDatabaseActiveLoads && !options.expectedFingerprint) return Promise.resolve(false);
+      driveDatabaseActiveLoads += 1;
       const callbackName = `t23DriveDb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const params = new URLSearchParams({
         mode: "loadDriveDatabase",
@@ -5647,33 +5758,57 @@ def main():
 	        peopleMasterCsv: driveDatabaseConfig.peopleMasterCsv,
 	        contractTemplateCsv: driveDatabaseConfig.contractTemplateCsv,
 	        actionSlaCsv: driveDatabaseConfig.actionSlaCsv,
-	        callback: callbackName
+	        callback: callbackName,
+	        cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
 	      });
-      const script = document.createElement("script");
-      let done = false;
-      window[callbackName] = payload => {
-        done = true;
-        try {
-          if (!applyDriveDatabasePayload(payload)) updateDatabaseSyncStatus("Shared Drive database is empty");
-        } catch (error) {
-          updateDatabaseSyncStatus("Shared Drive database could not load");
-        } finally {
+      return new Promise(resolve => {
+        const script = document.createElement("script");
+        let done = false;
+        const finish = success => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timeoutId);
           delete window[callbackName];
           script.remove();
-        }
-      };
-      script.onerror = () => {
-        if (!done) updateDatabaseSyncStatus("Shared Drive database could not load");
-        delete window[callbackName];
-        script.remove();
-      };
-      script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
-      document.head.appendChild(script);
+          driveDatabaseActiveLoads = Math.max(0, driveDatabaseActiveLoads - 1);
+          if (success) lastDriveDatabaseRefreshAt = Date.now();
+          resolve(success);
+        };
+        const timeoutId = window.setTimeout(() => {
+          if (!silent) updateDatabaseSyncStatus("Shared Drive database load timed out");
+          finish(false);
+        }, 15000);
+        window[callbackName] = payload => {
+          try {
+            const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "" });
+            if (!applied && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
+            finish(applied);
+          } catch (error) {
+            if (!silent) updateDatabaseSyncStatus("Shared Drive database could not load");
+            finish(false);
+          }
+        };
+        script.onerror = () => {
+          if (!silent) updateDatabaseSyncStatus("Shared Drive database could not load");
+          finish(false);
+        };
+        script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+        document.head.appendChild(script);
+      });
     }
 
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return;
+      if (isDriveDatabaseSaveInProgress) {
+        driveDatabaseSaveQueued = true;
+        return;
+      }
+      window.clearTimeout(driveDatabaseSaveTimer);
+      driveDatabaseSaveTimer = 0;
+      isDriveDatabaseSaveInProgress = true;
+      const payload = driveDatabaseCsvPayload();
+      const expectedFingerprint = driveDatabasePayloadFingerprint(payload);
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
         await fetch(endpoint, {
@@ -5681,18 +5816,55 @@ def main():
           mode: "no-cors",
           redirect: "follow",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(driveDatabaseCsvPayload())
+          body: JSON.stringify(payload)
         });
-        updateDatabaseSyncStatus(`${contracts.length} contracts saved to Shared Drive`);
+        const retryDelays = [500, 1000, 1800, 3000];
+        let verified = false;
+        for (const delayMs of retryDelays) {
+          await new Promise(resolve => window.setTimeout(resolve, delayMs));
+          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint });
+          if (verified) break;
+        }
+        updateDatabaseSyncStatus(verified
+          ? `${contracts.length} contracts saved and refreshed from Shared Drive`
+          : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
+      } finally {
+        isDriveDatabaseSaveInProgress = false;
+        if (driveDatabaseSaveQueued) {
+          driveDatabaseSaveQueued = false;
+          scheduleDriveDatabaseSave();
+        }
       }
     }
 
     function scheduleDriveDatabaseSave() {
       if (isApplyingDriveDatabaseLoad) return;
+      if (isDriveDatabaseSaveInProgress) {
+        driveDatabaseSaveQueued = true;
+        return;
+      }
       clearTimeout(driveDatabaseSaveTimer);
       driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 800);
+    }
+
+    function refreshDriveDatabaseIfActive() {
+      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (Date.now() - lastDriveDatabaseRefreshAt < 5000) return;
+      loadDriveDatabaseFromCloud({ silent: true });
+    }
+
+    function startDriveDatabaseAutoRefresh() {
+      window.clearInterval(driveDatabaseRefreshTimer);
+      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 15000);
+      if (!document.body.dataset.driveRefreshBound) {
+        document.body.dataset.driveRefreshBound = "true";
+        window.addEventListener("focus", refreshDriveDatabaseIfActive);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) refreshDriveDatabaseIfActive();
+        });
+      }
     }
 
     function exportContractsCsv() {
@@ -7632,6 +7804,7 @@ def main():
       loadContractsDatabase();
       renderAll();
       loadDriveDatabaseFromCloud();
+      startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
     }
 
@@ -9228,23 +9401,29 @@ function loadDriveDatabase_(params) {{
 }}
 
 function saveDriveDatabase_(payload) {{
-  const folder = DriveApp.getFolderById(payload.folderId || DEFAULT_FOLDER_ID);
-  const files = {{
-    contracts: upsertTextFileByName_(folder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", payload.contractsCsvText || ""),
-    logs: upsertTextFileByName_(folder, payload.logsCsv || "tracking_contracts_log_db.csv", payload.logsCsvText || ""),
-    typeMaster: upsertTextFileByName_(folder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", payload.typeMasterCsvText || ""),
-	    departments: upsertTextFileByName_(folder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", payload.departmentMasterCsvText || ""),
-	    people: upsertTextFileByName_(folder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", payload.peopleMasterCsvText || ""),
-	    contractTemplates: upsertTextFileByName_(folder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", payload.contractTemplateCsvText || ""),
-	    actionSla: upsertTextFileByName_(folder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", payload.actionSlaCsvText || "")
-  }};
-  return jsonResponse({{
-    success: true,
-    saved: true,
-    savedAt: new Date().toISOString(),
-    folderId: folder.getId(),
-    files: files
-  }});
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {{
+    const folder = DriveApp.getFolderById(payload.folderId || DEFAULT_FOLDER_ID);
+    const files = {{
+      contracts: upsertTextFileByName_(folder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", payload.contractsCsvText || ""),
+      logs: upsertTextFileByName_(folder, payload.logsCsv || "tracking_contracts_log_db.csv", payload.logsCsvText || ""),
+      typeMaster: upsertTextFileByName_(folder, payload.typeMasterCsv || "tracking_contracts_type_master_db.csv", payload.typeMasterCsvText || ""),
+	      departments: upsertTextFileByName_(folder, payload.departmentMasterCsv || "tracking_contracts_department_master_db.csv", payload.departmentMasterCsvText || ""),
+	      people: upsertTextFileByName_(folder, payload.peopleMasterCsv || "tracking_contracts_people_master_db.csv", payload.peopleMasterCsvText || ""),
+	      contractTemplates: upsertTextFileByName_(folder, payload.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv", payload.contractTemplateCsvText || ""),
+	      actionSla: upsertTextFileByName_(folder, payload.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv", payload.actionSlaCsvText || "")
+    }};
+    return jsonResponse({{
+      success: true,
+      saved: true,
+      savedAt: new Date().toISOString(),
+      folderId: folder.getId(),
+      files: files
+    }});
+  }} finally {{
+    lock.releaseLock();
+  }}
 }}
 
 function backupDriveDatabase_(payload) {{
@@ -9534,7 +9713,8 @@ function jsonpResponse(data, callback) {{
     OUTPUT_README.write_text(
         "\n".join([
             "T23 Tracking Contracts CSV Database",
-            f"Google Drive folder: {DRIVE_FOLDER_URL}",
+            "Google Drive account: everyone.turtle23.ai@gmail.com",
+            f"Google Drive database folder: {DRIVE_FOLDER_URL}",
             f"HTML: {OUTPUT_HTML.name}",
             f"Codex generator code: {OUTPUT_CODE.name}",
             f"Contracts CSV database: {OUTPUT_CONTRACTS_CSV.name}",
@@ -9550,6 +9730,9 @@ function jsonpResponse(data, callback) {{
             "Add Case / Update Status / Close Case save locally first, then sync the CSV database back to the shared Drive folder in the background.",
             "To enable real email sending, direct attachment upload, and Drive CSV sync, deploy tracking_contracts_attachment_upload_apps_script.js as a Google Apps Script Web App.",
             "Then paste the Web App URL into ATTACHMENT_UPLOAD_ENDPOINT in tracking_contracts_dashboard_codex_code.py and regenerate the HTML.",
+            "",
+            "Production source of truth: the CSV files in the Google Drive database folder above.",
+            "Do not upload an empty local contracts or log CSV over the production Drive files.",
         ]),
         encoding="utf-8",
     )
