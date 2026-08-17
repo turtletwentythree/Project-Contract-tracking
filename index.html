@@ -17381,7 +17381,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncDepartmentOwnerOptions(false);
       setInputValueIfEmpty("addOwner", employeesForDepartment(document.querySelector("#addDepartment")?.value)[0]?.name || "Kawinphop Champee (Boss)");
       syncDepartmentOwnerOptions(false);
-      setInputValueIfEmpty("updateTo", "Siwaporn Iamwiboon (Grace)");
+      // Intentionally no default recipient here: To must be chosen explicitly for every
+      // Update Status action (see syncSelectedContractForms), so Station Owner always moves.
       fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
@@ -17981,7 +17982,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updateForm.elements.from.value = currentStation.to || updateContract.owner || "";
         const boundId = updateForm.dataset.boundContractId;
         if (force || boundId !== updateContract.id) {
-          updateForm.elements.to.value = currentStation.to || updateContract.owner || "";
+          // Leave To blank on purpose: Station Owner must change with every Action, so the
+          // user is required to actively pick the next recipient instead of silently
+          // resubmitting the current Station Owner as the default.
+          updateForm.elements.to.value = "";
           const latest = latestLogFor(updateContract.id);
           const runtimeIn = latest?.[7] || latest?.[6] || todayInputValue();
           const runtimeOut = todayInputValue();
@@ -19914,14 +19918,20 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.stage = action;
       contract.cycle = nextCycle;
       contract.returns = nextReturns;
-      contract.alert = alert;
       contract.station = `From ${from} >> To ${to}`;
-      contract.days = days;
-      contract.used = Number(contract.used || 0) + days;
-      contract.balance = Number(contract.totalSla || 0) - Number(contract.used || 0);
-      contract.status = calculateContractStatus(action, contract.used, contract.totalSla);
       contract.remark = actionReasonInput || delayReason || correctiveAction || contract.remark;
       if (!await uploadQueuedAttachmentsToCloud()) return;
+
+      // Close out the log leg that is ending now. Without this, the previous log row keeps
+      // an empty Out Date, so calculateDaysOnHand() re-counts it live (start date -> today)
+      // every time totals are recalculated, on top of the days added for the new leg below.
+      // That double counting was the "Longest pending on hand" bug: the same span got summed
+      // once as a still-open row and again as the newly logged leg.
+      const previousOpenLog = latestLogFor(contractId);
+      if (previousOpenLog && !String(previousOpenLog[7] || "").trim()) {
+        previousOpenLog[7] = runtimeIn;
+        recalculateLogTiming(previousOpenLog);
+      }
 
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === contractId).length + 1;
@@ -19963,6 +19973,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
+      // Recompute used/days/balance/status/alert from the full (now correctly closed) log
+      // history instead of adding on top of a possibly-already-live-counted total.
+      syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === contractId);
       selectedLogContractId = contractId;
@@ -20014,14 +20027,19 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         showToast("Select a recipient with a valid email. / กรุณาเลือกผู้รับที่มีอีเมลถูกต้อง");
         return;
       }
-      const alert = calculateAlert(stage, 0, 0);
       contract.stage = stage;
       contract.owner = owner;
-      contract.status = alert;
-      contract.alert = alert;
       contract.station = `From ${owner} >> To ${owner}`;
-      contract.days = 0;
-      contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
+
+      // Close out the log leg that is ending now (same fix as Update Status): otherwise the
+      // previous row's empty Out Date keeps getting re-counted as live days forever, even
+      // after the case is closed, inflating totals the next time logs are recalculated.
+      const previousOpenLog = latestLogFor(id);
+      if (previousOpenLog && !String(previousOpenLog[7] || "").trim()) {
+        previousOpenLog[7] = closeDate;
+        recalculateLogTiming(previousOpenLog);
+      }
+
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
       const logId = `LOG-${id.replace(/\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
@@ -20048,6 +20066,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
+      // Recompute used/days/balance/status/alert from the full log history in one consistent
+      // pass instead of hand-setting them (days naturally comes out 0 since In = Out = closeDate).
+      syncContractTimingFromLogs(contract);
+      contract.balance = Math.max(0, Number(contract.balance || 0));
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === id);
       selectedLogContractId = id;
