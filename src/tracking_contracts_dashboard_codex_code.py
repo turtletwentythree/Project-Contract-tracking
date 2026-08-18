@@ -6179,8 +6179,10 @@ def main():
       return `<span class="master-readonly">${escapeHtml(value === "" || value == null ? "-" : value)}</span>`;
     }
 
-    function masterDeleteButton() {
-      return `<button class="icon-button" type="button" data-remove-master-row title="Remove row">×</button>`;
+    function masterDeleteButton(options = {}) {
+      const disabled = Boolean(options.disabled);
+      const title = disabled ? "First Action cannot be deleted" : "Remove row";
+      return `<button class="icon-button" type="button" data-remove-master-row title="${title}"${disabled ? " disabled aria-disabled=\"true\"" : ""}>×</button>`;
     }
 
     function stationOwnerForMasterContract(contract) {
@@ -6225,6 +6227,8 @@ def main():
         let previousCycleGroup = "";
         logBody.innerHTML = sortedLogRows.map(row => {
           const actionChoices = row[12] && !updateActionList.includes(row[12]) ? [row[12], ...updateActionList] : updateActionList;
+          const firstLogNo = Math.min(...logRecords.filter(item => item[0] === row[0]).map(item => Number(item[1]) || Number.MAX_SAFE_INTEGER));
+          const isFirstAction = Number(row[1]) === firstLogNo;
           const cycleGroup = `${row[0]}::${row[2]}`;
           const startsCycle = cycleGroup !== previousCycleGroup;
           previousCycleGroup = cycleGroup;
@@ -6263,7 +6267,7 @@ def main():
             <td>${masterInput("actionReasonTypeEn", row[30] || "")}</td>
             <td>${masterInput("attachmentsJson", JSON.stringify(Array.isArray(row[31]) ? row[31] : []), { multiline: true })}</td>
             <td>${masterInput("ccRecipientsJson", JSON.stringify(Array.isArray(row[32]) ? row[32] : []), { multiline: true })}</td>
-            <td>${masterDeleteButton()}</td>
+            <td>${masterDeleteButton({ disabled: isFirstAction })}</td>
           </tr>`;
         }).join("");
       }
@@ -6370,6 +6374,7 @@ def main():
       const addCaseDateMap = new Map();
       const nextLogRecords = [];
       const usedLogKeys = new Set();
+      const submittedOriginalLogKeys = new Set();
       const firstLogInChanged = new Set();
       let hasContractError = false;
       let hasLogError = false;
@@ -6427,6 +6432,7 @@ def main():
         const rawContractId = String(row.contractId || originalContractId).trim();
         const contractId = idMap.get(rawContractId) || rawContractId;
         const originalLogNo = String(row._originalLogNo || "").trim();
+        submittedOriginalLogKeys.add(`${originalContractId}::${originalLogNo}`);
         const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === originalLogNo) || [];
         const logNo = Number(row.logNo || originalLog[1] || 0);
         const cycle = Number(row.cycle || originalLog[2] || 1);
@@ -6541,6 +6547,22 @@ def main():
         }
         recalculateLogTiming(nextLog);
         nextLogRecords.push(nextLog);
+      });
+
+      const firstOriginalLogByContract = new Map();
+      logRecords.forEach(originalLog => {
+        const contractId = String(originalLog?.[0] || "").trim();
+        const current = firstOriginalLogByContract.get(contractId);
+        if (!current || Number(originalLog?.[1] || 0) < Number(current?.[1] || 0)) firstOriginalLogByContract.set(contractId, originalLog);
+      });
+      firstOriginalLogByContract.forEach((firstLog, originalContractId) => {
+        const originalKey = `${originalContractId}::${String(firstLog?.[1] || "").trim()}`;
+        if (submittedOriginalLogKeys.has(originalKey)) return;
+        const contractId = idMap.get(originalContractId) || originalContractId;
+        if (!keptIds.has(contractId)) return;
+        const preservedLog = [...firstLog];
+        preservedLog[0] = contractId;
+        nextLogRecords.push(preservedLog);
       });
 
       if (hasContractError) {
