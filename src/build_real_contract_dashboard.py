@@ -3164,7 +3164,7 @@ def main():
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Delay Reason</th><th>Action</th><th>Action Reason</th><th></th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>Log View</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Delay Reason</th><th>Action</th><th>Action Summary</th><th>Handoff Check</th><th>Final Action</th><th>Action Reason Type</th><th>Action Reason Detail</th><th>Approval Type</th><th>Approval Conditions</th><th>Corrective Action Detail</th><th>Updated By</th><th>Updated Date and Time</th><th>Action Code</th><th>Action Name TH</th><th>Action Name EN</th><th>Action Description TH</th><th>Action Description EN</th><th>Action SLA</th><th>Action Reason Type TH</th><th>Action Reason Type EN</th><th>Attachments JSON</th><th>CC Recipients JSON</th><th></th></tr></thead>
                     <tbody id="masterLogRows"></tbody>
                   </table>
                 </div>
@@ -6211,6 +6211,7 @@ def main():
             <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
             <td>${masterInput("logNo", row[1], { type: "number" })}</td>
             <td>${masterInput("cycle", row[2], { type: "number" })}</td>
+            <td>${masterInput("logView", row[3])}</td>
             <td>${masterInput("from", row[4])}</td>
             <td>${masterInput("to", row[5])}</td>
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
@@ -6220,7 +6221,26 @@ def main():
             <td>${masterInput("alert", row[10])}</td>
             <td>${masterInput("delayReason", row[11])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
-            <td>${masterInput("actionReason", row[17] || "")}</td>
+            <td>${masterInput("actionSummary", row[13] || "")}</td>
+            <td>${masterInput("handoffCheck", row[14] || "")}</td>
+            <td>${masterInput("finalAction", row[15] || "")}</td>
+            <td>${masterInput("actionReasonType", row[16] || "")}</td>
+            <td>${masterInput("actionReason", row[17] || "", { multiline: true })}</td>
+            <td>${masterInput("approvalType", row[18] || "")}</td>
+            <td>${masterInput("approvalConditions", row[19] || "", { multiline: true })}</td>
+            <td>${masterInput("correctiveAction", row[20] || "", { multiline: true })}</td>
+            <td>${masterInput("updatedBy", row[21] || "")}</td>
+            <td>${masterInput("updatedAt", row[22] || "")}</td>
+            <td>${masterInput("actionCode", row[23] || "")}</td>
+            <td>${masterInput("actionNameTh", row[24] || "")}</td>
+            <td>${masterInput("actionNameEn", row[25] || "")}</td>
+            <td>${masterInput("actionDescriptionTh", row[26] || "", { multiline: true })}</td>
+            <td>${masterInput("actionDescriptionEn", row[27] || "", { multiline: true })}</td>
+            <td>${masterInput("actionSla", row[28] || 0, { type: "number" })}</td>
+            <td>${masterInput("actionReasonTypeTh", row[29] || "")}</td>
+            <td>${masterInput("actionReasonTypeEn", row[30] || "")}</td>
+            <td>${masterInput("attachmentsJson", JSON.stringify(Array.isArray(row[31]) ? row[31] : []), { multiline: true })}</td>
+            <td>${masterInput("ccRecipientsJson", JSON.stringify(Array.isArray(row[32]) ? row[32] : []), { multiline: true })}</td>
             <td>${masterDeleteButton()}</td>
           </tr>`;
         }).join("");
@@ -6321,7 +6341,7 @@ def main():
         ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
         ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
       ];
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "daysOnHand", "alert", "delayReason", "action", "actionReason"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "logView", "from", "to", "inDate", "outDate", "sla", "daysOnHand", "alert", "delayReason", "action", "actionSummary", "handoffCheck", "finalAction", "actionReasonType", "actionReason", "approvalType", "approvalConditions", "correctiveAction", "updatedBy", "updatedAt", "actionCode", "actionNameTh", "actionNameEn", "actionDescriptionTh", "actionDescriptionEn", "actionSla", "actionReasonTypeTh", "actionReasonTypeEn", "attachmentsJson", "ccRecipientsJson"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
@@ -6388,8 +6408,20 @@ def main():
         const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === originalLogNo) || [];
         const logNo = Number(row.logNo || originalLog[1] || 0);
         const cycle = Number(row.cycle || originalLog[2] || 1);
-        const from = String(row.from || originalLog[4] || "").trim();
-        const to = String(row.to || originalLog[5] || "").trim();
+        const requestedLogView = String(row.logView || originalLog[3] || "").trim();
+        let from = String(row.from || originalLog[4] || "").trim();
+        let to = String(row.to || originalLog[5] || "").trim();
+        const fromWasChanged = from !== String(originalLog[4] || "").trim();
+        const toWasChanged = to !== String(originalLog[5] || "").trim();
+        const logViewWasChanged = requestedLogView !== String(originalLog[3] || "").trim();
+        if (logViewWasChanged && !fromWasChanged && !toWasChanged) {
+          const route = stationParts(requestedLogView);
+          if (route.from && route.to) {
+            from = route.from;
+            to = route.to;
+          }
+        }
+        const logView = logViewWasChanged && !fromWasChanged && !toWasChanged ? requestedLogView : `From ${from} >> To ${to}`;
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
         const sla = Number(row.sla || originalLog[8] || 0);
@@ -6397,7 +6429,33 @@ def main():
         const alert = String(row.alert || "").trim();
         const delayReason = String(row.delayReason || "").trim();
         const action = String(row.action || originalLog[12] || "").trim();
+        const actionSummary = String(row.actionSummary || "").trim();
+        const handoffCheck = String(row.handoffCheck || "").trim();
+        const finalAction = String(row.finalAction || "").trim();
+        const actionReasonType = String(row.actionReasonType || "").trim();
         const actionReason = String(row.actionReason || "").trim();
+        const approvalType = String(row.approvalType || "").trim();
+        const approvalConditions = String(row.approvalConditions || "").trim();
+        const correctiveAction = String(row.correctiveAction || "").trim();
+        const updatedBy = String(row.updatedBy || "").trim();
+        const updatedAt = String(row.updatedAt || "").trim();
+        const actionCode = String(row.actionCode || "").trim();
+        const actionNameTh = String(row.actionNameTh || "").trim();
+        const actionNameEn = String(row.actionNameEn || "").trim();
+        const actionDescriptionTh = String(row.actionDescriptionTh || "").trim();
+        const actionDescriptionEn = String(row.actionDescriptionEn || "").trim();
+        const actionSla = Number(row.actionSla || 0);
+        const actionReasonTypeTh = String(row.actionReasonTypeTh || "").trim();
+        const actionReasonTypeEn = String(row.actionReasonTypeEn || "").trim();
+        let attachments = null;
+        let ccRecipients = null;
+        try {
+          attachments = JSON.parse(String(row.attachmentsJson || "[]"));
+          ccRecipients = JSON.parse(String(row.ccRecipientsJson || "[]"));
+        } catch (error) {
+          hasLogError = true;
+          return;
+        }
         const logKey = `${contractId}::${logNo}`;
         if (!contractId) {
           hasLogError = true;
@@ -6409,7 +6467,7 @@ def main():
           hasLogError = true;
           return;
         }
-        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !Number.isFinite(daysOnHand) || daysOnHand < 0 || !alert || !action || usedLogKeys.has(logKey)) {
+        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !Number.isFinite(daysOnHand) || daysOnHand < 0 || !alert || !action || !Number.isFinite(actionSla) || actionSla < 0 || !Array.isArray(attachments) || !Array.isArray(ccRecipients) || usedLogKeys.has(logKey)) {
           hasLogError = true;
           return;
         }
@@ -6420,11 +6478,13 @@ def main():
         const timingInputsChanged = dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
         const manualDaysChanged = Number(nextLog[9] || 0) !== daysOnHand;
         const manualAlertChanged = String(nextLog[10] || "") !== alert;
-        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || timingInputsChanged || manualDaysChanged || manualAlertChanged || String(nextLog[11] || "") !== delayReason || String(nextLog[17] || "") !== actionReason;
+        const metadataChanged = String(nextLog[3] || "") !== logView || String(nextLog[13] || "") !== actionSummary || String(nextLog[14] || "") !== handoffCheck || String(nextLog[15] || "") !== finalAction || String(nextLog[16] || "") !== actionReasonType || String(nextLog[17] || "") !== actionReason || String(nextLog[18] || "") !== approvalType || String(nextLog[19] || "") !== approvalConditions || String(nextLog[20] || "") !== correctiveAction || String(nextLog[23] || "") !== actionCode || String(nextLog[24] || "") !== actionNameTh || String(nextLog[25] || "") !== actionNameEn || String(nextLog[26] || "") !== actionDescriptionTh || String(nextLog[27] || "") !== actionDescriptionEn || Number(nextLog[28] || 0) !== actionSla || String(nextLog[29] || "") !== actionReasonTypeTh || String(nextLog[30] || "") !== actionReasonTypeEn || JSON.stringify(nextLog[31] || []) !== JSON.stringify(attachments) || JSON.stringify(nextLog[32] || []) !== JSON.stringify(ccRecipients);
+        const auditChanged = String(nextLog[21] || "") !== updatedBy || String(nextLog[22] || "") !== updatedAt;
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || timingInputsChanged || manualDaysChanged || manualAlertChanged || String(nextLog[11] || "") !== delayReason || metadataChanged || auditChanged;
         nextLog[0] = contractId;
         nextLog[1] = logNo;
         nextLog[2] = cycle;
-        nextLog[3] = `From ${from} >> To ${to}`;
+        nextLog[3] = logView;
         nextLog[4] = from;
         nextLog[5] = to;
         nextLog[6] = nextIn;
@@ -6434,21 +6494,28 @@ def main():
         nextLog[34] = manualAlertChanged ? alert : (timingInputsChanged ? "" : (originalLog[34] ?? ""));
         nextLog[11] = delayReason;
         nextLog[12] = action;
+        nextLog[13] = actionSummary;
+        nextLog[14] = handoffCheck;
+        nextLog[15] = finalAction;
+        nextLog[16] = actionReasonType;
         nextLog[17] = actionReason;
         const actionInfo = actionDefinition(action);
-        nextLog[23] = actionInfo.code;
-        nextLog[24] = actionInfo.nameTh;
-        nextLog[25] = actionInfo.nameEn;
-        nextLog[26] = actionInfo.descriptionTh;
-        nextLog[27] = actionInfo.descriptionEn;
-        nextLog[28] = Number(sla) || actionInfo.sla;
-        nextLog[29] = actionInfo.reasonTh;
-        nextLog[30] = actionInfo.reasonEn;
-        nextLog[16] = actionInfo.reasonEn;
+        nextLog[18] = approvalType;
+        nextLog[19] = approvalConditions;
+        nextLog[20] = correctiveAction;
+        nextLog[23] = actionCode || actionInfo.code;
+        nextLog[24] = actionNameTh || actionInfo.nameTh;
+        nextLog[25] = actionNameEn || actionInfo.nameEn;
+        nextLog[26] = actionDescriptionTh || actionInfo.descriptionTh;
+        nextLog[27] = actionDescriptionEn || actionInfo.descriptionEn;
+        nextLog[28] = actionSla || Number(sla) || actionInfo.sla;
+        nextLog[29] = actionReasonTypeTh || actionInfo.reasonTh;
+        nextLog[30] = actionReasonTypeEn || actionInfo.reasonEn;
+        nextLog[31] = attachments;
+        nextLog[32] = ccRecipients;
         if (changed) {
-          nextLog[13] = nextLog[13] || `${action} by ${currentUser?.name || "Admin"}`;
-          nextLog[21] = currentUser?.name || "Admin";
-          nextLog[22] = localIsoDateTime();
+          nextLog[21] = auditChanged ? updatedBy : (currentUser?.name || "Admin");
+          nextLog[22] = auditChanged ? updatedAt : localIsoDateTime();
         }
         recalculateLogTiming(nextLog);
         nextLogRecords.push(nextLog);
@@ -6459,7 +6526,7 @@ def main():
         return false;
       }
       if (hasLogError) {
-        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Days on Hand, Alert, Action, and unique Log No per Contract");
+        showToast("Log Records require valid IDs, dates, SLA values, Action, unique Log No, and valid JSON arrays for Attachments and CC Recipients");
         return false;
       }
 
