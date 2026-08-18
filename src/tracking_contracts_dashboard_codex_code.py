@@ -5402,7 +5402,7 @@ def main():
         "Returns": item.returns,
         "Status Update": item.status,
         "Station": item.station,
-        "Station Owner": station.to,
+        "Station Owner": station.to || item.stationOwner || item.owner || "",
         "Add Case Date": item.addCaseDate || firstLogFor(item.id)?.[6] || "",
         "Due Date": item.due,
         "System Due Date": item.systemDue || "",
@@ -7058,6 +7058,81 @@ def main():
     html = html.replace(
         'const longestPendingOnHand = dashboardData',
         'const longestPendingOnHand = visibleDashboardData',
+        1,
+    )
+    html = html.replace(
+        '''      const longestPendingOnHand = visibleDashboardData
+        .filter(item => item.isPending === 1 && item.alertCode === "R")
+        .map(item => {
+          const contract = contracts.find(row => row.id === item.id) || {};
+          const latestLog = latestLogFor(item.id);
+          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
+          return {
+            id: item.id,
+            name: item.name || contract.name || "-",
+            type: contract.type || "-",
+            vendor: contract.vendor || "-",
+            department: item.department || contract.department || "-",
+            contractOwner: item.owner || contract.owner || "Unassigned",
+            stationOwner,
+            pendingDays: Number(item.pendingDays) || Number(contract.used) || 0
+          };
+        })
+        .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));''',
+        '''      const longestPendingOnHand = visibleDashboardData
+        .filter(item => item.isPending === 1)
+        .map(item => {
+          const contract = contracts.find(row => row.id === item.id) || {};
+          const latestLog = latestLogFor(item.id);
+          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
+          const latestAlert = latestLog?.[10] || contract.alert || item.status || "";
+          const pendingDays = latestLog
+            ? calculateDaysOnHand(latestLog[6], latestLog[7])
+            : Number(contract.days) || 0;
+          return {
+            id: item.id,
+            name: item.name || contract.name || "-",
+            type: contract.type || "-",
+            vendor: contract.vendor || "-",
+            department: item.department || contract.department || "-",
+            contractOwner: item.owner || contract.owner || "Unassigned",
+            stationOwner,
+            alertCode: statusCodeFor(latestAlert),
+            pendingDays
+          };
+        })
+        .filter(item => item.alertCode === "R")
+        .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));''',
+        1,
+    )
+    html = html.replace(
+        '          contract.station = latestLog[3];',
+        '          contract.station = latestLog[3];\n          contract.stationOwner = latestLog[5] || stationParts(latestLog[3]).to || contract.stationOwner || "";',
+        1,
+    )
+    html = html.replace(
+        '        station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),',
+        '        station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),\n        stationOwner,',
+        1,
+    )
+    html = html.replace(
+        '        station: `From ${owner} >> To ${to}`,',
+        '        station: `From ${owner} >> To ${to}`,\n        stationOwner: to,',
+        1,
+    )
+    html = html.replace(
+        '      contract.station = `From ${from} >> To ${to}`;',
+        '      contract.station = `From ${from} >> To ${to}`;\n      contract.stationOwner = to;',
+        1,
+    )
+    html = html.replace(
+        '      contract.station = `From ${owner} >> To ${owner}`;',
+        '      contract.station = `From ${owner} >> To ${owner}`;\n      contract.stationOwner = owner;',
+        1,
+    )
+    html = html.replace(
+        '          station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,',
+        '          station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,\n          stationOwner,',
         1,
     )
 
