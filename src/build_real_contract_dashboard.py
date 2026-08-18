@@ -7038,6 +7038,99 @@ def main():
       });''',
         1,
     )
+    html = html.replace(
+        '''        const latestLog = contractLogs.at(-1);
+        contract.stage = migrateAction(latestLog?.[12] || contract.stage);''',
+        '''        const latestLog = contractLogs.at(-1);
+        const latestStationLog = contractLogs.filter(logChangesStationOwner).at(-1) || latestLog;
+        contract.stage = migrateAction(latestLog?.[12] || contract.stage);''',
+        1,
+    )
+    html = html.replace(
+        '''          contract.station = latestLog[3];
+          contract.stationOwner = latestLog[5] || stationParts(latestLog[3]).to || contract.stationOwner || "";''',
+        '''          contract.station = latestStationLog?.[3] || contract.station;
+          contract.stationOwner = latestStationLog?.[5] || stationParts(latestStationLog?.[3] || contract.station).to || contract.stationOwner || "";''',
+        1,
+    )
+    html = html.replace(
+        '''          const latestLog = latestLogFor(item.id);
+          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
+          const latestAlert = latestLog?.[10] || contract.alert || item.status || "";
+          const pendingDays = latestLog
+            ? calculateDaysOnHand(latestLog[6], latestLog[7])''',
+        '''          const latestStationLog = latestStationLogFor(item.id);
+          const stationOwner = latestStationLog?.[5] || item.currentTo || contract.stationOwner || contract.owner || "Unassigned";
+          const latestAlert = latestStationLog?.[10] || contract.alert || item.status || "";
+          const pendingDays = latestStationLog
+            ? calculateDaysOnHand(latestStationLog[6], latestStationLog[7])''',
+        1,
+    )
+    html = html.replace(
+        '''        const latestLog = latestLogFor(item.id);
+        return latestLog ? latestLog[5] : stationParts(item.station).to;''',
+        '''        const latestStationLog = latestStationLogFor(item.id);
+        return latestStationLog ? latestStationLog[5] : stationParts(item.station).to;''',
+    )
+    html = html.replace(
+        '''        const latestLog = latestLogFor(item.id);
+        const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;''',
+        '''        const latestStationLog = latestStationLogFor(item.id);
+        const latestStationOwner = latestStationLog ? latestStationLog[5] : stationParts(item.station).to;''',
+    )
+    html = html.replace(
+        '''        const latestLogButton = latestLog
+          ? logRouteLink(latestLog)
+          : stationOwnerLink(item.station, item.id);
+        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestLog);''',
+        '''        const latestLogButton = latestStationLog
+          ? logRouteLink(latestStationLog)
+          : stationOwnerLink(item.station, item.id);
+        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestStationLog);''',
+        1,
+    )
+    html = html.replace(
+        '''    function latestLogFor(contractId) {
+      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
+    }
+
+    function firstLogFor(contractId) {''',
+        '''    function latestLogFor(contractId) {
+      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
+    }
+
+    function logChangesStationOwner(row) {
+      const action = String(row?.[12] || "").trim();
+      return !/^Due Date\\b/i.test(action);
+    }
+
+    function latestStationLogFor(contractId) {
+      const contractLogs = logRecords.filter(row => row[0] === contractId);
+      return contractLogs.filter(logChangesStationOwner).slice(-1)[0] || contractLogs.slice(-1)[0] || null;
+    }
+
+    function firstLogFor(contractId) {''',
+        1,
+    )
+    html = html.replace(
+        '''      const latest = rows.slice(-1)[0] || null;
+      const totalSla = Number(contract.totalSla''',
+        '''      const latest = rows.slice(-1)[0] || null;
+      const latestStationLog = rows.filter(logChangesStationOwner).slice(-1)[0] || latest;
+      const totalSla = Number(contract.totalSla''',
+        1,
+    )
+    html = html.replace(
+        '''      contract.status = calculateContractStatus(contract.stage, used, totalSla);
+      return contract;''',
+        '''      contract.status = calculateContractStatus(contract.stage, used, totalSla);
+      if (latestStationLog) {
+        contract.station = latestStationLog[3] || `From ${latestStationLog[4] || contract.owner || ""} >> To ${latestStationLog[5] || ""}`;
+        contract.stationOwner = latestStationLog[5] || stationParts(contract.station).to || contract.stationOwner || "";
+      }
+      return contract;''',
+        1,
+    )
 
     # Login Gateway is injected after all existing dashboard transformations so the
     # original views and business logic remain intact behind the authentication gate.
