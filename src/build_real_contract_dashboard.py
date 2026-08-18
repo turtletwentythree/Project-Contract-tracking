@@ -7152,7 +7152,7 @@ def main():
     )
     html = html.replace(
         '      contract.station = `From ${owner} >> To ${owner}`;',
-        '      contract.station = `From ${owner} >> To ${stationRecipient}`;\n      contract.stationOwner = stationRecipient;',
+        '      contract.station = previousStation;\n      contract.stationOwner = previousStationOwner;',
         1,
     )
     html = html.replace(
@@ -7161,7 +7161,9 @@ def main():
       syncCloseRecipientEmail(true);''',
         '''      const stage = form.get("stage");
       const to = String(form.get("to") || "").trim();
-      const stationRecipient = to || owner;
+      const previousStationLog = latestStationLogFor(id);
+      const previousStationOwner = previousStationLog?.[5] || contract.stationOwner || stationParts(contract.station).to || owner;
+      const previousStation = previousStationLog?.[3] || contract.station || `From ${owner} >> To ${previousStationOwner}`;
       syncCloseRecipientEmail(true);''',
         1,
     )
@@ -7172,7 +7174,7 @@ def main():
         inDate: closeDate,''',
         '''        station: contract.station,
         from: owner,
-        to: stationRecipient,
+        to: previousStationOwner,
         inDate: closeDate,''',
         1,
     )
