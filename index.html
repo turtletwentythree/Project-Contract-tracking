@@ -20098,6 +20098,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const closeDate = String(form.get("closeDate") || todayInputValue());
       const stage = form.get("stage");
       const to = String(form.get("to") || "").trim();
+      const stationRecipient = to || owner;
       syncCloseRecipientEmail(true);
       const toEmail = String(document.querySelector("#closeToEmail")?.value || "").trim();
       if (!toEmail) {
@@ -20107,8 +20108,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       }
       contract.stage = stage;
       contract.owner = owner;
-      contract.station = `From ${owner} >> To ${owner}`;
-      contract.stationOwner = owner;
+      contract.station = `From ${owner} >> To ${stationRecipient}`;
+      contract.stationOwner = stationRecipient;
 
       // Close out the log leg that is ending now (same fix as Update Status): otherwise the
       // previous row's empty Out Date keeps getting re-counted as live days forever, even
@@ -20118,7 +20119,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         previousOpenLog[7] = closeDate;
         recalculateLogTiming(previousOpenLog);
       }
-
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
       const logId = `LOG-${id.replace(/\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
@@ -20135,7 +20135,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         cycle: contract.cycle,
         station: contract.station,
         from: owner,
-        to: owner,
+        to: stationRecipient,
         inDate: closeDate,
         outDate: closeDate,
         sla: 0,
