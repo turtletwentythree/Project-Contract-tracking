@@ -3084,17 +3084,18 @@ def main():
               <section class="panel master-data-panel master-data-panel-full">
                 <div class="panel-header">
                   <div>
-                    <h2>Log Records</h2>
-                    <small>Edit or delete incorrect created from Log View Detail.</small>
+                    <h2>Log View</h2>
+                    <small>Add, edit, or delete Log View records. Days on Hand and Alert are recalculated automatically.</small>
                   </div>
                   <div class="master-data-actions">
                     <button class="secondary-button" type="button" data-master-import="logs">Import</button>
                     <button class="secondary-button" type="button" data-master-export="logs">Export</button>
+                    <button class="secondary-button" type="button" data-add-master-row="logs">Add Row</button>
                   </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th><th></th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Delay Reason</th><th>Action</th><th>Action Reason</th><th></th></tr></thead>
                     <tbody id="masterLogRows"></tbody>
                   </table>
                 </div>
@@ -6034,7 +6035,9 @@ def main():
             <td>${masterInput("sla", row[8], { type: "number" })}</td>
             <td>${masterReadOnly(row[9])}</td>
             <td>${masterReadOnly(row[10])}</td>
+            <td>${masterInput("delayReason", row[11])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
+            <td>${masterInput("actionReason", row[17] || "")}</td>
             <td>${masterDeleteButton()}</td>
           </tr>`;
         }).join("");
@@ -6135,7 +6138,7 @@ def main():
         ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
         ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
       ];
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "action"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "delayReason", "action", "actionReason"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
@@ -6207,7 +6210,9 @@ def main():
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
         const sla = Number(row.sla || originalLog[8] || 0);
+        const delayReason = String(row.delayReason || "").trim();
         const action = String(row.action || originalLog[12] || "").trim();
+        const actionReason = String(row.actionReason || "").trim();
         const logKey = `${contractId}::${logNo}`;
         if (!contractId) {
           hasLogError = true;
@@ -6227,7 +6232,7 @@ def main():
         const originalIn = dateToInputValue(originalLog[6] || "");
         if (Number(logNo) === 1 && nextIn !== originalIn) firstLogInChanged.add(contractId);
         const nextLog = Array.isArray(originalLog) ? [...originalLog] : Array.from({ length: logDatabaseHeaders.length }, () => "");
-        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[11] || "") !== delayReason || String(nextLog[12] || "") !== action || String(nextLog[17] || "") !== actionReason;
         nextLog[0] = contractId;
         nextLog[1] = logNo;
         nextLog[2] = cycle;
@@ -6237,8 +6242,19 @@ def main():
         nextLog[6] = nextIn;
         nextLog[7] = nextOut;
         nextLog[8] = sla;
+        nextLog[11] = delayReason;
         nextLog[12] = action;
-        nextLog[28] = Number(nextLog[28] || sla) || sla;
+        nextLog[17] = actionReason;
+        const actionInfo = actionDefinition(action);
+        nextLog[23] = actionInfo.code;
+        nextLog[24] = actionInfo.nameTh;
+        nextLog[25] = actionInfo.nameEn;
+        nextLog[26] = actionInfo.descriptionTh;
+        nextLog[27] = actionInfo.descriptionEn;
+        nextLog[28] = Number(sla) || actionInfo.sla;
+        nextLog[29] = actionInfo.reasonTh;
+        nextLog[30] = actionInfo.reasonEn;
+        nextLog[16] = actionInfo.reasonEn;
         if (changed) {
           nextLog[13] = nextLog[13] || `${action} by ${currentUser?.name || "Admin"}`;
           nextLog[21] = currentUser?.name || "Admin";
@@ -6321,6 +6337,15 @@ def main():
 
     function addMasterRow(kind) {
       if (!normalizeMasterDataFromUi()) return;
+      if (kind === "logs") {
+        const contract = contracts[0];
+        if (!contract) return;
+        const station = stationParts(contract.station);
+        const from = station.to || contract.stationOwner || contract.owner || "Owner";
+        const nextLogNo = logRecords.filter(row => row[0] === contract.id).length + 1;
+        addLogRecord({ contractId: contract.id, cycle: contract.cycle || 1, station: `From ${from} >> To ${from}`, from, to: from, inDate: todayInputValue(), outDate: "", sla: 1, delayReason: "", action: "Submit to Review", updatedBy: currentUser?.name || "Admin" });
+        logRecords.at(-1)[1] = nextLogNo;
+      }
       if (kind === "departments") masterData.departments.push({ "Department / Restaurant": "", "Department Code": "", "Department Data Version": departmentDataVersion, Active: "Yes" });
 	      if (kind === "people") masterData.people.push({ company: "Turtle 23", department: "", name: "", email: "", active: "Yes" });
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
