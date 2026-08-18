@@ -7470,8 +7470,8 @@
                   </label>
                   <label class="form-field compact-dropdown-field due-approver-select-field">
                     <span class="bilingual-label"><span>Approver To (Display Name)<span class="field-required-mark" aria-hidden="true">*</span></span><span>ผู้อนุมัติ<span class="field-required-mark" aria-hidden="true">*</span></span></span>
-                    <select class="select approver-multi-select" name="approver" id="dueApprovalTo" multiple size="2" aria-describedby="dueApproverHint"></select>
-                    <small class="form-hint" id="dueApproverHint">เลือกได้ 1 หรือ 2 อีเมล โดยระบบเลือกทั้งสองรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.</small>
+                    <select class="select approver-multi-select" name="approver" id="dueApprovalTo" multiple size="3" aria-describedby="dueApproverHint"></select>
+                    <small class="form-hint" id="dueApproverHint">เลือกได้ 1 ถึง 3 อีเมล โดยระบบเลือกทุกรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.</small>
                   </label>
                   <label class="form-field due-approver-detail-field">
                     <span class="bilingual-label"><span>Approver Email(s)</span><span>อีเมลผู้อนุมัติ</span></span>
@@ -14435,18 +14435,36 @@
       const actionTh = row[24] || "-";
       const descriptionEn = row[27] || "";
       const descriptionTh = row[26] || "";
-      const reasonTypeEn = row[30] || row[16] || "";
-      const reasonTypeTh = row[29] || "";
-      const reasonDetail = row[17] || row[13] || row[11] || "";
+      const contract = contracts.find(item => item.id === row[0]) || {};
+      const actionName = String(row[12] || row[25] || "").trim();
+      const isAddCase = actionName === "Draft Created";
+      const isDueDateRequest = actionName === "Due Date Adjustment Requested";
+      const dueDateReason = isDueDateRequest
+        ? String(row[11] || "").replace(/^Requested Due Date\s+[^:]+:\s*/i, "").trim()
+        : "";
+      const reasonTypeEn = row[30] || row[16]
+        || (isAddCase ? "Additional note >> Remark" : "")
+        || (isDueDateRequest ? "Reason for Due Date Adjustment" : "");
+      const reasonTypeTh = row[29]
+        || (isAddCase ? "ข้อมูลประกอบ >> หมายเหตุ" : "")
+        || (isDueDateRequest ? "เหตุผลในการขอปรับ Due Date" : "");
+      const reasonDetail = row[17]
+        || (isAddCase ? contract.remark || "" : "")
+        || dueDateReason
+        || row[13]
+        || row[11]
+        || "";
+      const isRequiredReason = ["Return", "Resubmit", "Forward", "Due Date Adjustment Requested"].includes(actionName);
+      const reasonLabelEn = `${reasonTypeEn || "Reason"}${isRequiredReason ? "*" : ""}`;
+      const reasonLabelTh = `${reasonTypeTh || "เหตุผล"}${isRequiredReason ? "*" : ""}`;
       const approval = logApprovalText(row);
       const correctiveAction = row[20] || row[15] || "";
       const actionSla = row[28] || row[8] || "-";
       const detailRows = [
         ["Status", "สถานะ", actionEn, actionTh],
         ["Description", "คำอธิบาย", descriptionEn, descriptionTh],
-        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
-        ["Reason", "เหตุผล", reasonDetail, ""],
-        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],
+        ...(String(reasonDetail || "").trim() ? [[reasonLabelEn, reasonLabelTh, reasonDetail, ""]] : []),
+        ["Delay Reason", "เหตุผลที่ล่าช้า", isDueDateRequest ? "" : row[11] || "", ""],
         ["Approval", "การอนุมัติ", approval === "-" ? "" : approval, ""],
         ["Corrective Action", "การแก้ไข", correctiveAction, ""],
         ["SLA", "ระยะเวลาดำเนินการ", actionSla, ""],
@@ -17403,7 +17421,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
       const dueApproverSelect = document.querySelector("#dueApprovalTo");
       if (dueApproverSelect) {
-        const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com"];
+        const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com", "sarocha.k@turtle23.com"];
         const currentSelected = [...dueApproverSelect.selectedOptions].map(option => option.value);
         dueApproverSelect.innerHTML = allowedApproverEmails
           .map(email => `<option value="${escapeHtml(email)}">${escapeHtml(email)}</option>`)
@@ -19774,7 +19792,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: "",
         sla: totalSla,
         delayReason: "",
-        action: "Draft Created"
+        action: "Draft Created",
+        actionReasonType: baseRemark ? "Additional note >> Remark" : "",
+        actionReason: baseRemark,
+        actionReasonTypeTh: baseRemark ? "ข้อมูลประกอบ >> หมายเหตุ" : "",
+        actionReasonTypeEn: baseRemark ? "Additional note >> Remark" : ""
       });
       upsertDashboardData(contract);
       selectedContractIndex = contracts.length - 1;
@@ -19877,7 +19899,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: "",
         sla: 1,
         delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
-        action: "Due Date Adjustment Requested"
+        action: "Due Date Adjustment Requested",
+        actionReasonType: "Reason for Due Date Adjustment",
+        actionReason: reason,
+        actionReasonTypeTh: "เหตุผลในการขอปรับ Due Date",
+        actionReasonTypeEn: "Reason for Due Date Adjustment"
       });
 
       const draft = buildDueApprovalEmailDraft(request, contract);
