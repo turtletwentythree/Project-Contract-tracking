@@ -5157,8 +5157,11 @@ def main():
 
     function recalculateLogTiming(row) {
       if (!Array.isArray(row)) return row;
-      row[9] = calculateDaysOnHand(row[6], row[7]);
-      row[10] = calculateAlert(row[12], row[9], row[8]);
+      const calculatedDays = calculateDaysOnHand(row[6], row[7]);
+      const manualDays = row[33];
+      row[9] = manualDays === "" || manualDays == null ? calculatedDays : Number(manualDays);
+      const calculatedAlert = calculateAlert(row[12], row[9], row[8]);
+      row[10] = String(row[34] || "").trim() || calculatedAlert;
       return row;
     }
 
@@ -5181,6 +5184,12 @@ def main():
       contract.status = calculateContractStatus(contract.stage, used, totalSla);
       return contract;
     }""",
+        1,
+    )
+    html = html.replace(
+        """        row[9] = calculateDaysOnHand(row[6], row[7]);
+        row[10] = calculateAlert(row[12], row[9], row[8]);""",
+        """        recalculateLogTiming(row);""",
         1,
     )
     html = html.replace(
@@ -5247,7 +5256,9 @@ def main():
       "Action Reason Type TH",
       "Action Reason Type EN",
       "Attachments",
-      "CC Recipients"
+      "CC Recipients",
+      "Manual Days Override",
+      "Manual Alert Override"
     ];
 
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
@@ -6033,8 +6044,8 @@ def main():
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
             <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
             <td>${masterInput("sla", row[8], { type: "number" })}</td>
-            <td>${masterReadOnly(row[9])}</td>
-            <td>${masterReadOnly(row[10])}</td>
+            <td>${masterInput("daysOnHand", row[9], { type: "number" })}</td>
+            <td>${masterInput("alert", row[10])}</td>
             <td>${masterInput("delayReason", row[11])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
             <td>${masterInput("actionReason", row[17] || "")}</td>
@@ -6138,7 +6149,7 @@ def main():
         ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
         ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
       ];
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "delayReason", "action", "actionReason"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "daysOnHand", "alert", "delayReason", "action", "actionReason"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
@@ -6210,6 +6221,8 @@ def main():
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
         const sla = Number(row.sla || originalLog[8] || 0);
+        const daysOnHand = Number(row.daysOnHand);
+        const alert = String(row.alert || "").trim();
         const delayReason = String(row.delayReason || "").trim();
         const action = String(row.action || originalLog[12] || "").trim();
         const actionReason = String(row.actionReason || "").trim();
@@ -6224,7 +6237,7 @@ def main():
           hasLogError = true;
           return;
         }
-        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !action || usedLogKeys.has(logKey)) {
+        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !Number.isFinite(daysOnHand) || daysOnHand < 0 || !alert || !action || usedLogKeys.has(logKey)) {
           hasLogError = true;
           return;
         }
@@ -6232,7 +6245,10 @@ def main():
         const originalIn = dateToInputValue(originalLog[6] || "");
         if (Number(logNo) === 1 && nextIn !== originalIn) firstLogInChanged.add(contractId);
         const nextLog = Array.isArray(originalLog) ? [...originalLog] : Array.from({ length: logDatabaseHeaders.length }, () => "");
-        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[11] || "") !== delayReason || String(nextLog[12] || "") !== action || String(nextLog[17] || "") !== actionReason;
+        const timingInputsChanged = dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
+        const manualDaysChanged = Number(nextLog[9] || 0) !== daysOnHand;
+        const manualAlertChanged = String(nextLog[10] || "") !== alert;
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || timingInputsChanged || manualDaysChanged || manualAlertChanged || String(nextLog[11] || "") !== delayReason || String(nextLog[17] || "") !== actionReason;
         nextLog[0] = contractId;
         nextLog[1] = logNo;
         nextLog[2] = cycle;
@@ -6242,6 +6258,8 @@ def main():
         nextLog[6] = nextIn;
         nextLog[7] = nextOut;
         nextLog[8] = sla;
+        nextLog[33] = manualDaysChanged ? daysOnHand : (timingInputsChanged ? "" : (originalLog[33] ?? ""));
+        nextLog[34] = manualAlertChanged ? alert : (timingInputsChanged ? "" : (originalLog[34] ?? ""));
         nextLog[11] = delayReason;
         nextLog[12] = action;
         nextLog[17] = actionReason;
@@ -6269,7 +6287,7 @@ def main():
         return false;
       }
       if (hasLogError) {
-        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Action, and unique Log No per Contract");
+        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Days on Hand, Alert, Action, and unique Log No per Contract");
         return false;
       }
 
@@ -9420,6 +9438,8 @@ def main():
         "Action Reason Type EN",
         "Attachments",
         "CC Recipients",
+        "Manual Days Override",
+        "Manual Alert Override",
     ]
     log_csv_rows = [
         {header: row[index] if index < len(row) else "" for index, header in enumerate(log_headers)}
