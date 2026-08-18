@@ -7136,6 +7136,81 @@ def main():
         1,
     )
 
+    # Preserve the named Action Reason fields and Due Date approver list in regenerated HTML.
+    html = html.replace('name="approver" id="dueApprovalTo" multiple size="2"', 'name="approver" id="dueApprovalTo" multiple size="3"', 1)
+    html = html.replace(
+        'เลือกได้ 1 หรือ 2 อีเมล โดยระบบเลือกทั้งสองรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.',
+        'เลือกได้ 1 ถึง 3 อีเมล โดยระบบเลือกทุกรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.',
+        1,
+    )
+    html = html.replace(
+        'const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com"];',
+        'const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com", "sarocha.k@turtle23.com"];',
+        1,
+    )
+    html = html.replace(
+        '''      const reasonTypeEn = row[30] || row[16] || "";
+      const reasonTypeTh = row[29] || "";
+      const reasonDetail = row[17] || row[13] || row[11] || "";''',
+        '''      const contract = contracts.find(item => item.id === row[0]) || {};
+      const actionName = String(row[12] || row[25] || "").trim();
+      const isAddCase = actionName === "Draft Created";
+      const isDueDateRequest = actionName === "Due Date Adjustment Requested";
+      const dueDateReason = isDueDateRequest
+        ? String(row[11] || "").replace(/^Requested Due Date\\s+[^:]+:\\s*/i, "").trim()
+        : "";
+      const reasonTypeEn = row[30] || row[16]
+        || (isAddCase ? "Additional note >> Remark" : "")
+        || (isDueDateRequest ? "Reason for Due Date Adjustment" : "");
+      const reasonTypeTh = row[29]
+        || (isAddCase ? "ข้อมูลประกอบ >> หมายเหตุ" : "")
+        || (isDueDateRequest ? "เหตุผลในการขอปรับ Due Date" : "");
+      const reasonDetail = row[17]
+        || (isAddCase ? contract.remark || "" : "")
+        || dueDateReason
+        || row[13]
+        || row[11]
+        || "";
+      const isRequiredReason = ["Return", "Resubmit", "Forward", "Due Date Adjustment Requested"].includes(actionName);
+      const reasonLabelEn = `${reasonTypeEn || "Reason"}${isRequiredReason ? "*" : ""}`;
+      const reasonLabelTh = `${reasonTypeTh || "เหตุผล"}${isRequiredReason ? "*" : ""}`;''',
+        1,
+    )
+    html = html.replace(
+        '''        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
+        ["Reason", "เหตุผล", reasonDetail, ""],
+        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],''',
+        '''        ...(String(reasonDetail || "").trim() ? [[reasonLabelEn, reasonLabelTh, reasonDetail, ""]] : []),
+        ["Delay Reason", "เหตุผลที่ล่าช้า", isDueDateRequest ? "" : row[11] || "", ""],''',
+        1,
+    )
+    html = html.replace(
+        '''        delayReason: "",
+        action: "Draft Created"
+      });''',
+        '''        delayReason: "",
+        action: "Draft Created",
+        actionReasonType: baseRemark ? "Additional note >> Remark" : "",
+        actionReason: baseRemark,
+        actionReasonTypeTh: baseRemark ? "ข้อมูลประกอบ >> หมายเหตุ" : "",
+        actionReasonTypeEn: baseRemark ? "Additional note >> Remark" : ""
+      });''',
+        1,
+    )
+    html = html.replace(
+        '''        delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
+        action: "Due Date Adjustment Requested"
+      });''',
+        '''        delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
+        action: "Due Date Adjustment Requested",
+        actionReasonType: "Reason for Due Date Adjustment",
+        actionReason: reason,
+        actionReasonTypeTh: "เหตุผลในการขอปรับ Due Date",
+        actionReasonTypeEn: "Reason for Due Date Adjustment"
+      });''',
+        1,
+    )
+
     # Login Gateway is injected after all existing dashboard transformations so the
     # original views and business logic remain intact behind the authentication gate.
     auth_css = r'''
