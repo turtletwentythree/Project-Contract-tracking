@@ -7152,7 +7152,28 @@ def main():
     )
     html = html.replace(
         '      contract.station = `From ${owner} >> To ${owner}`;',
-        '      contract.station = `From ${owner} >> To ${owner}`;\n      contract.stationOwner = owner;',
+        '      contract.station = `From ${owner} >> To ${stationRecipient}`;\n      contract.stationOwner = stationRecipient;',
+        1,
+    )
+    html = html.replace(
+        '''      const stage = form.get("stage");
+      const to = String(form.get("to") || "").trim();
+      syncCloseRecipientEmail(true);''',
+        '''      const stage = form.get("stage");
+      const to = String(form.get("to") || "").trim();
+      const stationRecipient = to || owner;
+      syncCloseRecipientEmail(true);''',
+        1,
+    )
+    html = html.replace(
+        '''        station: contract.station,
+        from: owner,
+        to: owner,
+        inDate: closeDate,''',
+        '''        station: contract.station,
+        from: owner,
+        to: stationRecipient,
+        inDate: closeDate,''',
         1,
     )
     html = html.replace(
