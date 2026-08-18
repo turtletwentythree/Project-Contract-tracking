@@ -5277,6 +5277,13 @@ def main():
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
     let driveDatabaseSaveTimer = 0;
     let isApplyingDriveDatabaseLoad = false;
+    let masterDataHasUnsavedChanges = false;
+
+    function markMasterDataDirty() {
+      if (masterDataHasUnsavedChanges) return;
+      masterDataHasUnsavedChanges = true;
+      updateDatabaseSyncStatus("Unsaved Master Data changes");
+    }
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -5615,8 +5622,9 @@ def main():
 	      };
 	    }
 
-    function applyDriveDatabasePayload(payload) {
+    function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
+      if (masterDataHasUnsavedChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
       const typeMasterText = payload.typeMasterCsvText || payload.files?.typeMaster?.text || "";
@@ -5652,7 +5660,7 @@ def main():
       isApplyingDriveDatabaseLoad = false;
       if (migratedSlaCount || migratedDepartmentCount || migratedActionCount) scheduleDriveDatabaseSave();
       refreshDashboardDataFromContracts();
-      renderMasterData();
+      if (!masterDataHasUnsavedChanges) renderMasterData();
       renderAll();
       updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       return true;
@@ -5698,7 +5706,7 @@ def main():
 
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
-      if (!endpoint || isApplyingDriveDatabaseLoad) return;
+      if (!endpoint || isApplyingDriveDatabaseLoad) return false;
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
         await fetch(endpoint, {
@@ -5709,8 +5717,10 @@ def main():
           body: JSON.stringify(driveDatabaseCsvPayload())
         });
         updateDatabaseSyncStatus(`${contracts.length} contracts saved to Shared Drive`);
+        return true;
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
+        return false;
       }
     }
 
@@ -6458,6 +6468,7 @@ def main():
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
 	      if (kind === "actionSla") masterData.actionSla.push({ Action: "Submit to Review", "Description / รายละเอียด": actionDescriptionConfig["Submit to Review"].descriptionTh, "Fixed SLA (Working Days)": "", "SLA Rule / วิธีนับ": actionDescriptionConfig["Submit to Review"].slaRuleTh, "Action Data Version": actionDataVersion, Active: "Yes" });
 	      if (kind === "contractTemplates") masterData.contractTemplates.push({ classification: "Day-to-day Work / งานดำเนินงานทั่วไป", typeGroup: "", subType: "", name: "", selectionLabel: "", sourceRow: "", type: "", workType: "", contractId: "", accessLevel: "Normal", category: "Day-to-day Work / งานดำเนินงานทั่วไป", department: "", vendor: "", group: "", fixedSla: "", slaVersion: standardSlaDataVersion, active: "Yes" });
+      markMasterDataDirty();
       renderMasterData();
     }
 
@@ -6465,12 +6476,13 @@ def main():
       if (!requireSystemAdministrator()) return;
       if (!window.confirm("Confirm save Master Data to Database?")) return;
       if (!normalizeMasterDataFromUi()) return;
-      renderMasterData();
-      saveContractsDatabase();
-      await saveDriveDatabaseToCloud();
+      saveContractsDatabase({ syncCloud: false });
+      const verified = await saveDriveDatabaseToCloud();
+      masterDataHasUnsavedChanges = !verified;
+      if (!masterDataHasUnsavedChanges) renderMasterData();
       populateUserControls();
       renderUserCasePreview();
-      notifyDatabaseSaved("Master Data saved. Database sync request sent.");
+      notifyDatabaseSaved(verified ? "Master Data saved to Shared Drive." : "Master Data saved locally. Shared Drive sync failed; please retry.");
     }
 
     function setupMasterDataControls() {
@@ -6478,7 +6490,11 @@ def main():
       document.querySelectorAll("[data-add-master-row]").forEach(button => {
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
-      document.querySelector("#master")?.addEventListener("click", event => {
+      const masterView = document.querySelector("#master");
+      ["input", "change"].forEach(eventName => masterView?.addEventListener(eventName, event => {
+        if (event.target.closest("[data-master-field]")) markMasterDataDirty();
+      }));
+      masterView?.addEventListener("click", event => {
         const importButton = event.target.closest("[data-master-import]");
         if (importButton) {
           openMasterImportPicker(importButton.dataset.masterImport);
@@ -6497,9 +6513,10 @@ def main():
           const label = `${row.dataset.contractId || "Contract"} · Log ${row.dataset.logNo || "-"} · Cycle ${row.dataset.cycle || "-"}`;
           if (!window.confirm(`Remove this row only?\n${label}`)) return;
         }
+        markMasterDataDirty();
         row.remove();
       });
-      renderMasterData();
+      if (!masterDataHasUnsavedChanges) renderMasterData();
     }
 
     function setupCsvDatabaseControls() {
@@ -6956,7 +6973,7 @@ def main():
         """      renderUserCasePreview();
       syncNavCounts();""",
         """      renderUserCasePreview();
-      renderMasterData();
+      if (!masterDataHasUnsavedChanges) renderMasterData();
       syncNavCounts();""",
     )
     html = html.replace(
@@ -9378,7 +9395,7 @@ def main():
     html = html.replace(
         '''      renderMasterData();
       syncNavCounts();''',
-        '''      renderMasterData();
+        '''      if (!masterDataHasUnsavedChanges) renderMasterData();
       renderAdministrativeControls();
       syncNavCounts();''',
         1,

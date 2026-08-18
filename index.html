@@ -18375,6 +18375,13 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseActiveLoads = 0;
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
+    let masterDataHasUnsavedChanges = false;
+
+    function markMasterDataDirty() {
+      if (masterDataHasUnsavedChanges) return;
+      masterDataHasUnsavedChanges = true;
+      updateDatabaseSyncStatus("Unsaved Master Data changes");
+    }
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -18749,6 +18756,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
+      if (masterDataHasUnsavedChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
       const typeMasterText = payload.typeMasterCsvText || payload.files?.typeMaster?.text || "";
@@ -18917,7 +18925,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function refreshDriveDatabaseIfActive() {
-      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (!currentUser || document.hidden || masterDataHasUnsavedChanges || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
       if (Date.now() - lastDriveDatabaseRefreshAt < 2000) return;
       loadDriveDatabaseFromCloud({ silent: true, force: true });
     }
@@ -19674,6 +19682,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
 	      if (kind === "actionSla") masterData.actionSla.push({ Action: "Submit to Review", "Description / รายละเอียด": actionDescriptionConfig["Submit to Review"].descriptionTh, "Fixed SLA (Working Days)": "", "SLA Rule / วิธีนับ": actionDescriptionConfig["Submit to Review"].slaRuleTh, "Action Data Version": actionDataVersion, Active: "Yes" });
 	      if (kind === "contractTemplates") masterData.contractTemplates.push({ classification: "Day-to-day Work / งานดำเนินงานทั่วไป", typeGroup: "", subType: "", name: "", selectionLabel: "", sourceRow: "", type: "", workType: "", contractId: "", accessLevel: "Normal", category: "Day-to-day Work / งานดำเนินงานทั่วไป", department: "", vendor: "", group: "", fixedSla: "", slaVersion: standardSlaDataVersion, active: "Yes" });
+      markMasterDataDirty();
       renderMasterData();
     }
 
@@ -19690,6 +19699,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       refreshDatabaseDrivenUi();
       saveContractsDatabase({ syncCloud: false });
       const verified = await saveDriveDatabaseToCloud();
+      masterDataHasUnsavedChanges = !verified;
       refreshDatabaseDrivenUi();
       if (saveButton) {
         saveButton.disabled = false;
@@ -19705,7 +19715,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       document.querySelectorAll("[data-add-master-row]").forEach(button => {
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
-      document.querySelector("#master")?.addEventListener("click", event => {
+      const masterView = document.querySelector("#master");
+      ["input", "change"].forEach(eventName => masterView?.addEventListener(eventName, event => {
+        if (event.target.closest("[data-master-field]")) markMasterDataDirty();
+      }));
+      masterView?.addEventListener("click", event => {
         const importButton = event.target.closest("[data-master-import]");
         if (importButton) {
           openMasterImportPicker(importButton.dataset.masterImport);
@@ -19724,9 +19738,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           const label = `${row.dataset.contractId || "Contract"} · Log ${row.dataset.logNo || "-"} · Cycle ${row.dataset.cycle || "-"}`;
           if (!window.confirm(`Remove this row only?\n${label}`)) return;
         }
+        markMasterDataDirty();
         row.remove();
       });
-      renderMasterData();
+      if (!masterDataHasUnsavedChanges) renderMasterData();
     }
 
     function setupCsvDatabaseControls() {
@@ -19754,7 +19769,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       renderLogView();
       populateUserControls();
       renderUserCasePreview();
-      renderMasterData();
+      if (!masterDataHasUnsavedChanges) renderMasterData();
       renderAdministrativeControls();
       syncNavCounts();
     }
