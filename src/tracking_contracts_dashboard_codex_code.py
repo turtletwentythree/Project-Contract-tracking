@@ -2189,6 +2189,19 @@ def main():
       height: 30px;
     }
 
+    .master-log-row.cycle-start > td {
+      border-top: 3px solid #1f6f8b;
+    }
+
+    .master-log-cycle-label {
+      display: block;
+      margin-bottom: 6px;
+      color: #13576f;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
     @media (max-width: 1040px) {
       .master-data-grid {
         grid-template-columns: 1fr;
@@ -3085,7 +3098,7 @@ def main():
                 <div class="panel-header">
                   <div>
                     <h2>Log View</h2>
-                    <small>Add, edit, or delete Log View records. Days on Hand and Alert are recalculated automatically.</small>
+                    <small>One editable row per Log No, grouped by Contract ID and Cycle.</small>
                   </div>
                   <div class="master-data-actions">
                     <button class="secondary-button" type="button" data-master-import="logs">Import</button>
@@ -6032,11 +6045,20 @@ def main():
 
       const logBody = document.querySelector("#masterLogRows");
       if (logBody) {
-        logBody.innerHTML = logRecords.map(row => {
+        const sortedLogRows = logRecords.slice().sort((left, right) =>
+          String(left?.[0] || "").localeCompare(String(right?.[0] || ""))
+          || (Number(left?.[2]) || 0) - (Number(right?.[2]) || 0)
+          || (Number(left?.[1]) || 0) - (Number(right?.[1]) || 0)
+        );
+        let previousCycleGroup = "";
+        logBody.innerHTML = sortedLogRows.map(row => {
           const actionChoices = row[12] && !updateActionList.includes(row[12]) ? [row[12], ...updateActionList] : updateActionList;
+          const cycleGroup = `${row[0]}::${row[2]}`;
+          const startsCycle = cycleGroup !== previousCycleGroup;
+          previousCycleGroup = cycleGroup;
           return `
-          <tr>
-            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
+          <tr class="master-log-row${startsCycle ? " cycle-start" : ""}" data-master-log-row data-contract-id="${escapeHtml(row[0])}" data-cycle="${escapeHtml(row[2])}" data-log-no="${escapeHtml(row[1])}">
+            <td>${startsCycle ? `<span class="master-log-cycle-label">${escapeHtml(row[0])} · Cycle ${escapeHtml(row[2])}</span>` : ""}<input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
             <td>${masterInput("logNo", row[1], { type: "number" })}</td>
             <td>${masterInput("cycle", row[2], { type: "number" })}</td>
             <td>${masterInput("logView", row[3])}</td>
