@@ -532,6 +532,10 @@
       background: var(--amber);
     }
 
+    .horizontal-status-segment.on-track {
+      background: var(--green);
+    }
+
     .horizontal-status-segment.overdue {
       background: var(--red);
     }
@@ -1145,6 +1149,10 @@
 
     .legend-swatch.delayed {
       background: var(--amber);
+    }
+
+    .legend-swatch.on-track {
+      background: var(--green);
     }
 
     .legend-swatch.overdue {
@@ -2484,19 +2492,6 @@
     .master-table .icon-button {
       width: 30px;
       height: 30px;
-    }
-
-    .master-log-row.cycle-start > td {
-      border-top: 3px solid #1f6f8b;
-    }
-
-    .master-log-cycle-label {
-      display: block;
-      margin-bottom: 6px;
-      color: #13576f;
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
     }
 
     @media (max-width: 1040px) {
@@ -7483,8 +7478,8 @@
                   </label>
                   <label class="form-field compact-dropdown-field due-approver-select-field">
                     <span class="bilingual-label"><span>Approver To (Display Name)<span class="field-required-mark" aria-hidden="true">*</span></span><span>ผู้อนุมัติ<span class="field-required-mark" aria-hidden="true">*</span></span></span>
-                    <select class="select approver-multi-select" name="approver" id="dueApprovalTo" multiple size="3" aria-describedby="dueApproverHint"></select>
-                    <small class="form-hint" id="dueApproverHint">เลือกได้ 1 ถึง 3 อีเมล โดยระบบเลือกทุกรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.</small>
+                    <select class="select approver-multi-select" name="approver" id="dueApprovalTo" multiple size="2" aria-describedby="dueApproverHint"></select>
+                    <small class="form-hint" id="dueApproverHint">เลือกได้ 1 หรือ 2 อีเมล โดยระบบเลือกทั้งสองรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.</small>
                   </label>
                   <label class="form-field due-approver-detail-field">
                     <span class="bilingual-label"><span>Approver Email(s)</span><span>อีเมลผู้อนุมัติ</span></span>
@@ -7603,18 +7598,17 @@
               <section class="panel master-data-panel master-data-panel-full">
                 <div class="panel-header">
                   <div>
-                    <h2>Log View</h2>
-                    <small>One editable row per Log No, grouped by Contract ID and Cycle.</small>
+                    <h2>Log Records</h2>
+                    <small>Edit or delete incorrect created from Log View Detail.</small>
                   </div>
                   <div class="master-data-actions">
                     <button class="secondary-button" type="button" data-master-import="logs">Import</button>
                     <button class="secondary-button" type="button" data-master-export="logs">Export</button>
-                    <button class="secondary-button" type="button" data-add-master-row="logs">Add Row</button>
                   </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>Log View</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Delay Reason</th><th>Action</th><th>Action Summary</th><th>Handoff Check</th><th>Final Action</th><th>Action Reason Type</th><th>Action Reason Detail</th><th>Approval Type</th><th>Approval Conditions</th><th>Corrective Action Detail</th><th>Updated By</th><th>Updated Date and Time</th><th>Action Code</th><th>Action Name TH</th><th>Action Name EN</th><th>Action Description TH</th><th>Action Description EN</th><th>Action SLA</th><th>Action Reason Type TH</th><th>Action Reason Type EN</th><th>Attachments JSON</th><th>CC Recipients JSON</th><th></th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th><th></th></tr></thead>
                     <tbody id="masterLogRows"></tbody>
                   </table>
                 </div>
@@ -13630,7 +13624,8 @@
       logRecords.forEach(row => {
         row[12] = migrateAction(row[12]);
         row[8] = Number(row[8]) || 0;
-        recalculateLogTiming(row);
+        row[9] = calculateDaysOnHand(row[6], row[7]);
+        row[10] = calculateAlert(row[12], row[9], row[8]);
         row[13] = row[13] || `${row[12]} by system`;
         row[14] = row[14] || "OK";
         row[15] = isClosedAction(row[12]) ? "Return to Owner" : "";
@@ -13663,14 +13658,12 @@
       contracts.forEach(contract => {
         const contractLogs = logRecords.filter(row => row[0] === contract.id);
         const latestLog = contractLogs.at(-1);
-        const latestStationLog = contractLogs.filter(logChangesStationOwner).at(-1) || latestLog;
         contract.stage = migrateAction(latestLog?.[12] || contract.stage);
         contract.cycle = Math.max(Number(contract.cycle || 1), ...contractLogs.map(row => Number(row[2]) || 1));
         contract.returns = contractLogs.filter(row => row[12] === "Return").length;
         if (latestLog) {
           contract.alert = latestLog[10];
-          contract.station = latestStationLog?.[3] || contract.station;
-          contract.stationOwner = latestStationLog?.[5] || stationParts(latestStationLog?.[3] || contract.station).to || contract.stationOwner || "";
+          contract.station = latestLog[3];
           contract.owner = contract.owner || latestLog[5];
           contract.days = Number(latestLog[9]) || 0;
           contract.used = contractLogs.reduce((total, row) => total + Number(row[9] || 0), 0);
@@ -13719,8 +13712,7 @@
     }
 
     function closedStatusLabel(value) {
-      const text = String(value || "");
-      return text.includes("Cancelled") ? "B=Cancelled" : "B=Completed";
+      return isCancelledStatus(value) ? "B=Cancelled" : "B=Completed";
     }
 
     function formatStationStatusLabel(value) {
@@ -13956,26 +13948,30 @@
 
     function groupedAlertBarRows(labels, countFn, options = {}) {
       const yellowLabel = options.yellowLabel || "Delayed";
-      const redLabel = options.redLabel || "Overdue";
+      const redLabel = options.redLabel || "At Risk";
       const rows = labels.map(item => {
+        const greenCount = countFn(item.value, "G");
         const yellowCount = countFn(item.value, "Y");
         const redCount = countFn(item.value, "R");
         return {
           label: item.label,
+          greenCount,
           yellowCount,
           redCount,
-          total: yellowCount + redCount
+          priorityTotal: yellowCount + redCount,
+          total: greenCount + yellowCount + redCount
         };
       }).filter(row => row.total > 0)
         .sort((a, b) =>
-          b.total - a.total ||
+          b.priorityTotal - a.priorityTotal ||
           b.redCount - a.redCount ||
           b.yellowCount - a.yellowCount ||
+          b.greenCount - a.greenCount ||
           a.label.localeCompare(b.label, "en", { sensitivity: "base" })
         );
 
       if (!rows.length) {
-        return `<div class="empty-state">No ${escapeHtml(yellowLabel)} or ${escapeHtml(redLabel)} records</div>`;
+        return `<div class="empty-state">No Alert records</div>`;
       }
 
       const maxTotal = Math.max(1, ...rows.map(row => row.total));
@@ -13983,13 +13979,15 @@
         <div class="horizontal-status-chart">
           ${rows.map(row => {
             const totalWidth = Math.max(4, (row.total / maxTotal) * 100);
+            const greenWidth = row.total ? (row.greenCount / row.total) * 100 : 0;
             const yellowWidth = row.total ? (row.yellowCount / row.total) * 100 : 0;
             const redWidth = row.total ? (row.redCount / row.total) * 100 : 0;
             return `
-              <div class="horizontal-status-row" title="${escapeHtml(row.label)}: ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
+              <div class="horizontal-status-row" title="${escapeHtml(row.label)}: On Track ${row.greenCount}, ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
                 <div class="horizontal-status-label">${escapeHtml(row.label)}</div>
                 <div class="horizontal-status-track">
                   <div class="horizontal-status-stack" style="width:${totalWidth}%">
+                    ${row.greenCount > 0 ? `<div class="horizontal-status-segment on-track" style="width:${greenWidth}%" aria-label="On Track ${row.greenCount}">${row.greenCount}</div>` : ""}
                     ${row.yellowCount > 0 ? `<div class="horizontal-status-segment delayed" style="width:${yellowWidth}%" aria-label="${escapeHtml(yellowLabel)} ${row.yellowCount}">${row.yellowCount}</div>` : ""}
                     ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
                   </div>
@@ -13999,6 +13997,7 @@
           }).join("")}
         </div>
         <div class="horizontal-status-legend">
+          <span><span class="legend-swatch on-track"></span>G = On Track</span>
           <span><span class="legend-swatch delayed"></span>Y = ${escapeHtml(yellowLabel)}</span>
           <span><span class="legend-swatch overdue"></span>R = ${escapeHtml(redLabel)}</span>
         </div>`;
@@ -14069,15 +14068,11 @@
         value: average(visibleDashboardData.filter(item => item.department === department), "totalSpendingDays")
       }));
       const longestPendingOnHand = visibleDashboardData
-        .filter(item => item.isPending === 1)
+        .filter(item => item.isPending === 1 && item.isOverdue === 1)
         .map(item => {
           const contract = contracts.find(row => row.id === item.id) || {};
-          const latestStationLog = latestStationLogFor(item.id);
-          const stationOwner = latestStationLog?.[5] || item.currentTo || contract.stationOwner || contract.owner || "Unassigned";
-          const latestAlert = latestStationLog?.[10] || contract.alert || item.status || "";
-          const pendingDays = latestStationLog
-            ? calculateDaysOnHand(latestStationLog[6], latestStationLog[7])
-            : Number(contract.days) || 0;
+          const latestLog = latestLogFor(item.id);
+          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
           return {
             id: item.id,
             name: item.name || contract.name || "-",
@@ -14086,11 +14081,9 @@
             department: item.department || contract.department || "-",
             contractOwner: item.owner || contract.owner || "Unassigned",
             stationOwner,
-            alertCode: statusCodeFor(latestAlert),
-            pendingDays
+            pendingDays: Number(item.pendingDays) || Number(contract.days) || 0
           };
         })
-        .filter(item => item.alertCode === "R")
         .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));
 
       const deptSpendSorted = [...deptSpend].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
@@ -14179,7 +14172,7 @@
         ${groupedAlertBarRows(
           mockDeptContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockDeptContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "Overdue" }
+          { yellowLabel: "Delayed", redLabel: "At Risk" }
         )}`;
 
       document.querySelector("#personAlertChart").innerHTML = `
@@ -14187,7 +14180,7 @@
         ${groupedAlertBarRows(
           mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "Overdue" }
+          { yellowLabel: "Delayed", redLabel: "At Risk" }
         )}`;
 
     }
@@ -14293,8 +14286,8 @@
       setContractMasterFilterOptions("stageFilter", "Stage", uniqueContractMasterValues(item => item.stage));
       setContractMasterFilterOptions("statusFilter", "Status Update", uniqueContractMasterValues(item => item.status));
       setContractMasterFilterOptions("stationOwnerFilter", "Station Owner", uniqueContractMasterValues(item => {
-        const latestStationLog = latestStationLogFor(item.id);
-        return latestStationLog ? latestStationLog[5] : stationParts(item.station).to;
+        const latestLog = latestLogFor(item.id);
+        return latestLog ? latestLog[5] : stationParts(item.station).to;
       }));
     }
 
@@ -14320,8 +14313,8 @@
         dueDateTo: document.querySelector("#dueDateToFilter")?.value || ""
       };
       const visibleContracts = contractsForContractStatus().filter(item => {
-        const latestStationLog = latestStationLogFor(item.id);
-        const latestStationOwner = latestStationLog ? latestStationLog[5] : stationParts(item.station).to;
+        const latestLog = latestLogFor(item.id);
+        const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;
         return matchesContractMasterFilter(item.id, filters.contractId)
           && matchesContractMasterFilter(item.department, filters.department)
           && matchesContractMasterFilter(item.owner, filters.owner)
@@ -14333,12 +14326,12 @@
           && (!filters.dueDateTo || dateToInputValue(item.due) <= filters.dueDateTo);
       });
       const rows = visibleContracts.map(item => {
-        const latestStationLog = latestStationLogFor(item.id);
-        const latestStationOwner = latestStationLog ? latestStationLog[5] : stationParts(item.station).to;
-        const latestLogButton = latestStationLog
-          ? logRouteLink(latestStationLog)
+        const latestLog = latestLogFor(item.id);
+        const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;
+        const latestLogButton = latestLog
+          ? logRouteLink(latestLog)
           : stationOwnerLink(item.station, item.id);
-        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestStationLog);
+        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestLog);
         return `
           <tr>
             <td><span class="contract-id">${item.id}</span></td>
@@ -14449,36 +14442,21 @@
       const actionTh = row[24] || "-";
       const descriptionEn = row[27] || "";
       const descriptionTh = row[26] || "";
-      const contract = contracts.find(item => item.id === row[0]) || {};
-      const actionName = String(row[12] || row[25] || "").trim();
-      const isAddCase = actionName === "Draft Created";
-      const isDueDateRequest = actionName === "Due Date Adjustment Requested";
-      const dueDateReason = isDueDateRequest
-        ? String(row[11] || "").replace(/^Requested Due Date\s+[^:]+:\s*/i, "").trim()
-        : "";
-      const reasonTypeEn = row[30] || row[16]
-        || (isAddCase ? "Additional note >> Remark" : "")
-        || (isDueDateRequest ? "Reason for Due Date Adjustment" : "");
-      const reasonTypeTh = row[29]
-        || (isAddCase ? "ข้อมูลประกอบ >> หมายเหตุ" : "")
-        || (isDueDateRequest ? "เหตุผลในการขอปรับ Due Date" : "");
-      const reasonDetail = row[17]
-        || (isAddCase ? contract.remark || "" : "")
-        || dueDateReason
-        || row[13]
-        || row[11]
-        || "";
-      const isRequiredReason = ["Return", "Resubmit", "Forward", "Due Date Adjustment Requested"].includes(actionName);
-      const reasonLabelEn = `${reasonTypeEn || "Reason"}${isRequiredReason ? "*" : ""}`;
-      const reasonLabelTh = `${reasonTypeTh || "เหตุผล"}${isRequiredReason ? "*" : ""}`;
+      const reasonTypeEn = row[30] || row[16] || "";
+      const reasonTypeTh = row[29] || "";
+      const reasonDetail = row[17] || row[13] || row[11] || "";
       const approval = logApprovalText(row);
       const correctiveAction = row[20] || row[15] || "";
       const actionSla = row[28] || row[8] || "-";
+      const currentContract = contracts.find(item => item.id === row[0]);
       const detailRows = [
-        ["Status", "สถานะ", actionEn, actionTh],
+        ["Action", "การดำเนินการ", actionEn, actionTh],
+        ["Alert", "การแจ้งเตือน", row[10] || "-", ""],
+        ["Status Update", "สถานะปัจจุบัน", currentContract?.status || currentContract?.alert || row[10] || "-", ""],
         ["Description", "คำอธิบาย", descriptionEn, descriptionTh],
-        ...(String(reasonDetail || "").trim() ? [[reasonLabelEn, reasonLabelTh, reasonDetail, ""]] : []),
-        ["Delay Reason", "เหตุผลที่ล่าช้า", isDueDateRequest ? "" : row[11] || "", ""],
+        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
+        ["Reason", "เหตุผล", reasonDetail, ""],
+        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],
         ["Approval", "การอนุมัติ", approval === "-" ? "" : approval, ""],
         ["Corrective Action", "การแก้ไข", correctiveAction, ""],
         ["SLA", "ระยะเวลาดำเนินการ", actionSla, ""],
@@ -15444,8 +15422,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         notice.classList.toggle("alert-yellow", code === "Y");
         notice.classList.toggle("alert-red", code === "R");
       }
-      if (noticeEn) noticeEn.textContent = code === "R" ? "The task has exceeded its SLA." : code === "Y" ? "The task has reached its SLA." : "";
-      if (noticeTh) noticeTh.textContent = code === "R" ? "งานเกิน SLA" : code === "Y" ? "งานถึงกำหนด SLA" : "";
+      if (noticeEn) noticeEn.textContent = code === "R" ? "The task has exceeded its SLA." : code === "Y" ? "The task is approaching or has reached its SLA." : "";
+      if (noticeTh) noticeTh.textContent = code === "R" ? "งานเกิน SLA" : code === "Y" ? "งานใกล้ถึงหรือครบกำหนด SLA" : "";
     }
 
     function validateUpdateReasonBeforeAction() {
@@ -16365,16 +16343,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function calculateAlert(action, daysOnHand, sla) {
       const numericSla = Number(sla) || 0;
-      if (action === "Signed / Completed") {
-        return "Black >>B=Completed";
-      }
-      if (action === "Cancelled") {
-        return "Black >>B=Cancelled";
-      }
-      if (daysOnHand < numericSla) {
+      const currentDays = Number(daysOnHand) || 0;
+      if (isCancelledStatus(action)) return "Black >>B=Cancelled";
+      if (isCompletedStatus(action)) return "Black >>B=Completed";
+      // Start the yellow warning one working day before the Action SLA.
+      if (currentDays < Math.max(0, numericSla - 1)) {
         return "Green >>G=On Track";
       }
-      if (daysOnHand === numericSla) {
+      if (currentDays <= numericSla) {
         return "Yellow >>Y=Delayed";
       }
       return "Red >>R=At Risk";
@@ -16383,15 +16359,25 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     function calculateContractStatus(stage, totalSpendingDays, totalSla) {
       const numericSla = Number(totalSla) || 0;
       const totalDays = Number(totalSpendingDays) || 0;
-      if (stage === "Signed / Completed") return "Black >>B=Completed";
-      if (stage === "Cancelled") return "Black >>B=Cancelled";
+      if (isCancelledStatus(stage)) return "Black >>B=Cancelled";
+      if (isCompletedStatus(stage)) return "Black >>B=Completed";
       if (totalDays < numericSla) return "Green >>G=On Track";
-      if (totalDays === numericSla) return "Yellow >>Y=Delayed";
+      // Keep the contract yellow until five working days beyond Total SLA.
+      if (totalDays < numericSla + 5) return "Yellow >>Y=Delayed";
       return "Red >>R=Overdue";
     }
 
+    function isCancelledStatus(value) {
+      return /\bcancelled\b/i.test(String(value || "").trim());
+    }
+
+    function isCompletedStatus(value) {
+      const text = String(value || "").trim();
+      return /\bcompleted\b/i.test(text) || /^signed$/i.test(text);
+    }
+
     function isClosedAction(action) {
-      return action === "Signed / Completed" || action === "Cancelled";
+      return isCancelledStatus(action) || isCompletedStatus(action);
     }
 
     function isPendingContract(contract) {
@@ -16427,15 +16413,16 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         department: item.department,
         owner: item.owner,
         status: item.status,
-        alertCode: alertCodeFor(item.status),
+        statusCode: alertCodeFor(item.status),
+        alertCode: alertCodeFor(item.alert),
         totalSpendingDays: item.used,
         isPending: closed ? 0 : 1,
-        isCompletedLast30Days: item.stage === "Signed / Completed" && isWithinLast30Days(closeDate) ? 1 : 0,
-        isCancelled: item.stage === "Cancelled" ? 1 : 0,
+        isCompletedLast30Days: isCompletedStatus(item.stage) && isWithinLast30Days(closeDate) ? 1 : 0,
+        isCancelled: isCancelledStatus(item.stage) ? 1 : 0,
         isOverdue: !closed && statusCodeFor(item.status) === "R" ? 1 : 0,
         currentTo: stationParts(item.station).to,
         deptBucket: deptBucketFor(item),
-        pendingDays: closed ? 0 : item.used
+        pendingDays: closed ? 0 : item.days
       };
       const index = dashboardData.findIndex(row => row.id === item.id);
       if (index >= 0) dashboardData[index] = record;
@@ -16588,16 +16575,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
     }
 
-    function logChangesStationOwner(row) {
-      const action = String(row?.[12] || "").trim();
-      return !/^Due Date\b/i.test(action);
-    }
-
-    function latestStationLogFor(contractId) {
-      const contractLogs = logRecords.filter(row => row[0] === contractId);
-      return contractLogs.filter(logChangesStationOwner).slice(-1)[0] || contractLogs.slice(-1)[0] || null;
-    }
-
     function firstLogFor(contractId) {
       return logRecords.find(row => row[0] === contractId) || null;
     }
@@ -16609,11 +16586,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function recalculateLogTiming(row) {
       if (!Array.isArray(row)) return row;
-      const calculatedDays = calculateDaysOnHand(row[6], row[7]);
-      const manualDays = row[33];
-      row[9] = manualDays === "" || manualDays == null ? calculatedDays : Number(manualDays);
-      const calculatedAlert = calculateAlert(row[12], row[9], row[8]);
-      row[10] = String(row[34] || "").trim() || calculatedAlert;
+      row[9] = calculateDaysOnHand(row[6], row[7]);
+      row[10] = calculateAlert(row[12], row[9], row[8]);
       return row;
     }
 
@@ -16622,7 +16596,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const rows = logRecords.filter(row => row[0] === contract.id);
       rows.forEach(recalculateLogTiming);
       const latest = rows.slice(-1)[0] || null;
-      const latestStationLog = rows.filter(logChangesStationOwner).slice(-1)[0] || latest;
       const totalSla = Number(contract.totalSla || totalSlaFor(contract.workType || contract.type)) || 0;
       const used = rows.reduce((sum, row) => sum + (Number(row[9]) || 0), 0);
       const startDate = addCaseStartDateForContract(contract);
@@ -16633,12 +16606,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.balance = totalSla - used;
       contract.systemDue = startDate ? addBusinessDays(startDate, totalSla) : (contract.systemDue || "");
       if (!contract.due) contract.due = contract.systemDue;
-      contract.alert = latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla);
+      contract.alert = isClosedAction(contract.stage)
+        ? calculateAlert(contract.stage, contract.days, latest?.[8] || totalSla)
+        : (latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla));
       contract.status = calculateContractStatus(contract.stage, used, totalSla);
-      if (latestStationLog) {
-        contract.station = latestStationLog[3] || `From ${latestStationLog[4] || contract.owner || ""} >> To ${latestStationLog[5] || ""}`;
-        contract.stationOwner = latestStationLog[5] || stationParts(contract.station).to || contract.stationOwner || "";
-      }
       return contract;
     }
 
@@ -17438,8 +17409,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncDepartmentOwnerOptions(false);
       setInputValueIfEmpty("addOwner", employeesForDepartment(document.querySelector("#addDepartment")?.value)[0]?.name || "Kawinphop Champee (Boss)");
       syncDepartmentOwnerOptions(false);
-      // Intentionally no default recipient here: To must be chosen explicitly for every
-      // Update Status action (see syncSelectedContractForms), so Station Owner always moves.
+      setInputValueIfEmpty("updateTo", "Siwaporn Iamwiboon (Grace)");
       fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
@@ -17453,7 +17423,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
       const dueApproverSelect = document.querySelector("#dueApprovalTo");
       if (dueApproverSelect) {
-        const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com", "sarocha.k@turtle23.com"];
+        const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com"];
         const currentSelected = [...dueApproverSelect.selectedOptions].map(option => option.value);
         dueApproverSelect.innerHTML = allowedApproverEmails
           .map(email => `<option value="${escapeHtml(email)}">${escapeHtml(email)}</option>`)
@@ -18039,10 +18009,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updateForm.elements.from.value = currentStation.to || updateContract.owner || "";
         const boundId = updateForm.dataset.boundContractId;
         if (force || boundId !== updateContract.id) {
-          // Leave To blank on purpose: Station Owner must change with every Action, so the
-          // user is required to actively pick the next recipient instead of silently
-          // resubmitting the current Station Owner as the default.
-          updateForm.elements.to.value = "";
+          updateForm.elements.to.value = currentStation.to || updateContract.owner || "";
           const latest = latestLogFor(updateContract.id);
           const runtimeIn = latest?.[7] || latest?.[6] || todayInputValue();
           const runtimeOut = todayInputValue();
@@ -18360,9 +18327,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       "Action Reason Type TH",
       "Action Reason Type EN",
       "Attachments",
-      "CC Recipients",
-      "Manual Days Override",
-      "Manual Alert Override"
+      "CC Recipients"
     ];
 
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
@@ -18375,13 +18340,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseActiveLoads = 0;
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
-    let masterDataHasUnsavedChanges = false;
-
-    function markMasterDataDirty() {
-      if (masterDataHasUnsavedChanges) return;
-      masterDataHasUnsavedChanges = true;
-      updateDatabaseSyncStatus("Unsaved Master Data changes");
-    }
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -18458,7 +18416,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         "Returns": item.returns,
         "Status Update": item.status,
         "Station": item.station,
-        "Station Owner": station.to || item.stationOwner || item.owner || "",
+        "Station Owner": station.to,
         "Add Case Date": item.addCaseDate || firstLogFor(item.id)?.[6] || "",
         "Due Date": item.due,
         "System Due Date": item.systemDue || "",
@@ -18496,7 +18454,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         returns: Number(row["Returns"] || 0) || 0,
         status: String(row["Status Update"] || row["Alert"] || "Green >>G=On Track").trim(),
         station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),
-        stationOwner,
         addCaseDate: String(row["Add Case Date"] || "").trim(),
         due: String(row["Due Date"] || "").trim(),
         systemDue: String(row["System Due Date"] || "").trim(),
@@ -18756,7 +18713,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
-      if (masterDataHasUnsavedChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
       const typeMasterText = payload.typeMasterCsvText || payload.files?.typeMaster?.text || "";
@@ -18925,7 +18881,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function refreshDriveDatabaseIfActive() {
-      if (!currentUser || document.hidden || masterDataHasUnsavedChanges || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
       if (Date.now() - lastDriveDatabaseRefreshAt < 2000) return;
       loadDriveDatabaseFromCloud({ silent: true, force: true });
     }
@@ -19230,7 +19186,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function masterDeleteButton() {
-      return `<button class="icon-button" type="button" data-remove-master-row title="Remove this row only">×</button>`;
+      return `<button class="icon-button" type="button" data-remove-master-row title="Remove row">×</button>`;
     }
 
     function stationOwnerForMasterContract(contract) {
@@ -19267,52 +19223,21 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
       const logBody = document.querySelector("#masterLogRows");
       if (logBody) {
-        const sortedLogRows = logRecords.slice().sort((left, right) =>
-          String(left?.[0] || "").localeCompare(String(right?.[0] || ""))
-          || (Number(left?.[2]) || 0) - (Number(right?.[2]) || 0)
-          || (Number(left?.[1]) || 0) - (Number(right?.[1]) || 0)
-        );
-        let previousCycleGroup = "";
-        logBody.innerHTML = sortedLogRows.map(row => {
+        logBody.innerHTML = logRecords.map(row => {
           const actionChoices = row[12] && !updateActionList.includes(row[12]) ? [row[12], ...updateActionList] : updateActionList;
-          const cycleGroup = `${row[0]}::${row[2]}`;
-          const startsCycle = cycleGroup !== previousCycleGroup;
-          previousCycleGroup = cycleGroup;
           return `
-          <tr class="master-log-row${startsCycle ? " cycle-start" : ""}" data-master-log-row data-contract-id="${escapeHtml(row[0])}" data-cycle="${escapeHtml(row[2])}" data-log-no="${escapeHtml(row[1])}">
-            <td>${startsCycle ? `<span class="master-log-cycle-label">${escapeHtml(row[0])} · Cycle ${escapeHtml(row[2])}</span>` : ""}<input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
+          <tr>
+            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
             <td>${masterInput("logNo", row[1], { type: "number" })}</td>
             <td>${masterInput("cycle", row[2], { type: "number" })}</td>
-            <td>${masterInput("logView", row[3])}</td>
             <td>${masterInput("from", row[4])}</td>
             <td>${masterInput("to", row[5])}</td>
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
             <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
             <td>${masterInput("sla", row[8], { type: "number" })}</td>
-            <td>${masterInput("daysOnHand", row[9], { type: "number" })}</td>
-            <td>${masterInput("alert", row[10])}</td>
-            <td>${masterInput("delayReason", row[11])}</td>
+            <td>${masterReadOnly(row[9])}</td>
+            <td>${masterReadOnly(row[10])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
-            <td>${masterInput("actionSummary", row[13] || "")}</td>
-            <td>${masterInput("handoffCheck", row[14] || "")}</td>
-            <td>${masterInput("finalAction", row[15] || "")}</td>
-            <td>${masterInput("actionReasonType", row[16] || "")}</td>
-            <td>${masterInput("actionReason", row[17] || "", { multiline: true })}</td>
-            <td>${masterInput("approvalType", row[18] || "")}</td>
-            <td>${masterInput("approvalConditions", row[19] || "", { multiline: true })}</td>
-            <td>${masterInput("correctiveAction", row[20] || "", { multiline: true })}</td>
-            <td>${masterInput("updatedBy", row[21] || "")}</td>
-            <td>${masterInput("updatedAt", row[22] || "")}</td>
-            <td>${masterInput("actionCode", row[23] || "")}</td>
-            <td>${masterInput("actionNameTh", row[24] || "")}</td>
-            <td>${masterInput("actionNameEn", row[25] || "")}</td>
-            <td>${masterInput("actionDescriptionTh", row[26] || "", { multiline: true })}</td>
-            <td>${masterInput("actionDescriptionEn", row[27] || "", { multiline: true })}</td>
-            <td>${masterInput("actionSla", row[28] || 0, { type: "number" })}</td>
-            <td>${masterInput("actionReasonTypeTh", row[29] || "")}</td>
-            <td>${masterInput("actionReasonTypeEn", row[30] || "")}</td>
-            <td>${masterInput("attachmentsJson", JSON.stringify(Array.isArray(row[31]) ? row[31] : []), { multiline: true })}</td>
-            <td>${masterInput("ccRecipientsJson", JSON.stringify(Array.isArray(row[32]) ? row[32] : []), { multiline: true })}</td>
             <td>${masterDeleteButton()}</td>
           </tr>`;
         }).join("");
@@ -19413,7 +19338,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
         ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
       ];
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "logView", "from", "to", "inDate", "outDate", "sla", "daysOnHand", "alert", "delayReason", "action", "actionSummary", "handoffCheck", "finalAction", "actionReasonType", "actionReason", "approvalType", "approvalConditions", "correctiveAction", "updatedBy", "updatedAt", "actionCode", "actionNameTh", "actionNameEn", "actionDescriptionTh", "actionDescriptionEn", "actionSla", "actionReasonTypeTh", "actionReasonTypeEn", "attachmentsJson", "ccRecipientsJson"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "action"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
@@ -19457,7 +19382,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           stage: String(row.stage || original.stage || "Draft Created").trim(),
           status: String(row.status || original.status || original.alert || "Green >>G=On Track").trim(),
           station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,
-          stationOwner,
           addCaseDate,
           due: String(row.due || original.due || "").trim(),
           workType: String(original.workType || type || "Other").trim(),
@@ -19481,54 +19405,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === originalLogNo) || [];
         const logNo = Number(row.logNo || originalLog[1] || 0);
         const cycle = Number(row.cycle || originalLog[2] || 1);
-        const requestedLogView = String(row.logView || originalLog[3] || "").trim();
-        let from = String(row.from || originalLog[4] || "").trim();
-        let to = String(row.to || originalLog[5] || "").trim();
-        const fromWasChanged = from !== String(originalLog[4] || "").trim();
-        const toWasChanged = to !== String(originalLog[5] || "").trim();
-        const logViewWasChanged = requestedLogView !== String(originalLog[3] || "").trim();
-        if (logViewWasChanged && !fromWasChanged && !toWasChanged) {
-          const route = stationParts(requestedLogView);
-          if (route.from && route.to) {
-            from = route.from;
-            to = route.to;
-          }
-        }
-        const logView = logViewWasChanged && !fromWasChanged && !toWasChanged ? requestedLogView : `From ${from} >> To ${to}`;
+        const from = String(row.from || originalLog[4] || "").trim();
+        const to = String(row.to || originalLog[5] || "").trim();
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
         const sla = Number(row.sla || originalLog[8] || 0);
-        const daysOnHand = Number(row.daysOnHand);
-        const alert = String(row.alert || "").trim();
-        const delayReason = String(row.delayReason || "").trim();
         const action = String(row.action || originalLog[12] || "").trim();
-        const actionSummary = String(row.actionSummary || "").trim();
-        const handoffCheck = String(row.handoffCheck || "").trim();
-        const finalAction = String(row.finalAction || "").trim();
-        const actionReasonType = String(row.actionReasonType || "").trim();
-        const actionReason = String(row.actionReason || "").trim();
-        const approvalType = String(row.approvalType || "").trim();
-        const approvalConditions = String(row.approvalConditions || "").trim();
-        const correctiveAction = String(row.correctiveAction || "").trim();
-        const updatedBy = String(row.updatedBy || "").trim();
-        const updatedAt = String(row.updatedAt || "").trim();
-        const actionCode = String(row.actionCode || "").trim();
-        const actionNameTh = String(row.actionNameTh || "").trim();
-        const actionNameEn = String(row.actionNameEn || "").trim();
-        const actionDescriptionTh = String(row.actionDescriptionTh || "").trim();
-        const actionDescriptionEn = String(row.actionDescriptionEn || "").trim();
-        const actionSla = Number(row.actionSla || 0);
-        const actionReasonTypeTh = String(row.actionReasonTypeTh || "").trim();
-        const actionReasonTypeEn = String(row.actionReasonTypeEn || "").trim();
-        let attachments = null;
-        let ccRecipients = null;
-        try {
-          attachments = JSON.parse(String(row.attachmentsJson || "[]"));
-          ccRecipients = JSON.parse(String(row.ccRecipientsJson || "[]"));
-        } catch (error) {
-          hasLogError = true;
-          return;
-        }
         const logKey = `${contractId}::${logNo}`;
         if (!contractId) {
           hasLogError = true;
@@ -19540,7 +19422,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           hasLogError = true;
           return;
         }
-        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !Number.isFinite(daysOnHand) || daysOnHand < 0 || !alert || !action || !Number.isFinite(actionSla) || actionSla < 0 || !Array.isArray(attachments) || !Array.isArray(ccRecipients) || usedLogKeys.has(logKey)) {
+        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !action || usedLogKeys.has(logKey)) {
           hasLogError = true;
           return;
         }
@@ -19548,47 +19430,22 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         const originalIn = dateToInputValue(originalLog[6] || "");
         if (Number(logNo) === 1 && nextIn !== originalIn) firstLogInChanged.add(contractId);
         const nextLog = Array.isArray(originalLog) ? [...originalLog] : Array.from({ length: logDatabaseHeaders.length }, () => "");
-        const timingInputsChanged = dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
-        const manualDaysChanged = Number(nextLog[9] || 0) !== daysOnHand;
-        const manualAlertChanged = String(nextLog[10] || "") !== alert;
-        const metadataChanged = String(nextLog[3] || "") !== logView || String(nextLog[13] || "") !== actionSummary || String(nextLog[14] || "") !== handoffCheck || String(nextLog[15] || "") !== finalAction || String(nextLog[16] || "") !== actionReasonType || String(nextLog[17] || "") !== actionReason || String(nextLog[18] || "") !== approvalType || String(nextLog[19] || "") !== approvalConditions || String(nextLog[20] || "") !== correctiveAction || String(nextLog[23] || "") !== actionCode || String(nextLog[24] || "") !== actionNameTh || String(nextLog[25] || "") !== actionNameEn || String(nextLog[26] || "") !== actionDescriptionTh || String(nextLog[27] || "") !== actionDescriptionEn || Number(nextLog[28] || 0) !== actionSla || String(nextLog[29] || "") !== actionReasonTypeTh || String(nextLog[30] || "") !== actionReasonTypeEn || JSON.stringify(nextLog[31] || []) !== JSON.stringify(attachments) || JSON.stringify(nextLog[32] || []) !== JSON.stringify(ccRecipients);
-        const auditChanged = String(nextLog[21] || "") !== updatedBy || String(nextLog[22] || "") !== updatedAt;
-        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || timingInputsChanged || manualDaysChanged || manualAlertChanged || String(nextLog[11] || "") !== delayReason || metadataChanged || auditChanged;
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
         nextLog[0] = contractId;
         nextLog[1] = logNo;
         nextLog[2] = cycle;
-        nextLog[3] = logView;
+        nextLog[3] = `From ${from} >> To ${to}`;
         nextLog[4] = from;
         nextLog[5] = to;
         nextLog[6] = nextIn;
         nextLog[7] = nextOut;
         nextLog[8] = sla;
-        nextLog[33] = manualDaysChanged ? daysOnHand : (timingInputsChanged ? "" : (originalLog[33] ?? ""));
-        nextLog[34] = manualAlertChanged ? alert : (timingInputsChanged ? "" : (originalLog[34] ?? ""));
-        nextLog[11] = delayReason;
         nextLog[12] = action;
-        nextLog[13] = actionSummary;
-        nextLog[14] = handoffCheck;
-        nextLog[15] = finalAction;
-        nextLog[16] = actionReasonType;
-        nextLog[17] = actionReason;
-        const actionInfo = actionDefinition(action);
-        nextLog[18] = approvalType;
-        nextLog[19] = approvalConditions;
-        nextLog[20] = correctiveAction;
-        nextLog[23] = actionCode || actionInfo.code;
-        nextLog[24] = actionNameTh || actionInfo.nameTh;
-        nextLog[25] = actionNameEn || actionInfo.nameEn;
-        nextLog[26] = actionDescriptionTh || actionInfo.descriptionTh;
-        nextLog[27] = actionDescriptionEn || actionInfo.descriptionEn;
-        nextLog[28] = actionSla || Number(sla) || actionInfo.sla;
-        nextLog[29] = actionReasonTypeTh || actionInfo.reasonTh;
-        nextLog[30] = actionReasonTypeEn || actionInfo.reasonEn;
-        nextLog[31] = attachments;
-        nextLog[32] = ccRecipients;
+        nextLog[28] = Number(nextLog[28] || sla) || sla;
         if (changed) {
-          nextLog[21] = auditChanged ? updatedBy : (currentUser?.name || "Admin");
-          nextLog[22] = auditChanged ? updatedAt : localIsoDateTime();
+          nextLog[13] = nextLog[13] || `${action} by ${currentUser?.name || "Admin"}`;
+          nextLog[21] = currentUser?.name || "Admin";
+          nextLog[22] = localIsoDateTime();
         }
         recalculateLogTiming(nextLog);
         nextLogRecords.push(nextLog);
@@ -19599,7 +19456,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         return false;
       }
       if (hasLogError) {
-        showToast("Log Records require valid IDs, dates, SLA values, Action, unique Log No, and valid JSON arrays for Attachments and CC Recipients");
+        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Action, and unique Log No per Contract");
         return false;
       }
 
@@ -19668,21 +19525,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     function addMasterRow(kind) {
       if (!requireSystemAdministrator()) return;
       if (!normalizeMasterDataFromUi()) return;
-      if (kind === "logs") {
-        const contract = contracts[0];
-        if (!contract) return;
-        const station = stationParts(contract.station);
-        const from = station.to || contract.stationOwner || contract.owner || "Owner";
-        const nextLogNo = logRecords.filter(row => row[0] === contract.id).length + 1;
-        addLogRecord({ contractId: contract.id, cycle: contract.cycle || 1, station: `From ${from} >> To ${from}`, from, to: from, inDate: todayInputValue(), outDate: "", sla: 1, delayReason: "", action: "Submit to Review", updatedBy: currentUser?.name || "Admin" });
-        logRecords.at(-1)[1] = nextLogNo;
-      }
       if (kind === "departments") masterData.departments.push({ "Department / Restaurant": "", "Department Code": "", "Department Data Version": departmentDataVersion, Active: "Yes" });
 	      if (kind === "people") masterData.people.push({ company: "Turtle 23", department: "", name: "", email: "", active: "Yes" });
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
 	      if (kind === "actionSla") masterData.actionSla.push({ Action: "Submit to Review", "Description / รายละเอียด": actionDescriptionConfig["Submit to Review"].descriptionTh, "Fixed SLA (Working Days)": "", "SLA Rule / วิธีนับ": actionDescriptionConfig["Submit to Review"].slaRuleTh, "Action Data Version": actionDataVersion, Active: "Yes" });
 	      if (kind === "contractTemplates") masterData.contractTemplates.push({ classification: "Day-to-day Work / งานดำเนินงานทั่วไป", typeGroup: "", subType: "", name: "", selectionLabel: "", sourceRow: "", type: "", workType: "", contractId: "", accessLevel: "Normal", category: "Day-to-day Work / งานดำเนินงานทั่วไป", department: "", vendor: "", group: "", fixedSla: "", slaVersion: standardSlaDataVersion, active: "Yes" });
-      markMasterDataDirty();
       renderMasterData();
     }
 
@@ -19699,7 +19546,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       refreshDatabaseDrivenUi();
       saveContractsDatabase({ syncCloud: false });
       const verified = await saveDriveDatabaseToCloud();
-      masterDataHasUnsavedChanges = !verified;
       refreshDatabaseDrivenUi();
       if (saveButton) {
         saveButton.disabled = false;
@@ -19715,11 +19561,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       document.querySelectorAll("[data-add-master-row]").forEach(button => {
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
-      const masterView = document.querySelector("#master");
-      ["input", "change"].forEach(eventName => masterView?.addEventListener(eventName, event => {
-        if (event.target.closest("[data-master-field]")) markMasterDataDirty();
-      }));
-      masterView?.addEventListener("click", event => {
+      document.querySelector("#master")?.addEventListener("click", event => {
         const importButton = event.target.closest("[data-master-import]");
         if (importButton) {
           openMasterImportPicker(importButton.dataset.masterImport);
@@ -19732,16 +19574,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         }
         const removeButton = event.target.closest("[data-remove-master-row]");
         if (!removeButton) return;
-        const row = removeButton.closest("tr");
-        if (!row) return;
-        if (row.matches("[data-master-log-row]")) {
-          const label = `${row.dataset.contractId || "Contract"} · Log ${row.dataset.logNo || "-"} · Cycle ${row.dataset.cycle || "-"}`;
-          if (!window.confirm(`Remove this row only?\n${label}`)) return;
-        }
-        markMasterDataDirty();
-        row.remove();
+        removeButton.closest("tr")?.remove();
       });
-      if (!masterDataHasUnsavedChanges) renderMasterData();
+      renderMasterData();
     }
 
     function setupCsvDatabaseControls() {
@@ -19760,6 +19595,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function renderAll() {
+      // Recalculate open Action and Contract SLA values from today's date before rendering.
+      contracts.forEach(syncContractTimingFromLogs);
+      refreshDashboardDataFromContracts();
       rebuildNotificationQueue();
       renderDashboardSummary();
       populateContractMasterFilters();
@@ -19769,7 +19607,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       renderLogView();
       populateUserControls();
       renderUserCasePreview();
-      if (!masterDataHasUnsavedChanges) renderMasterData();
+      renderMasterData();
       renderAdministrativeControls();
       syncNavCounts();
     }
@@ -19926,7 +19764,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         returns: 0,
         status: contractStatus,
         station: `From ${owner} >> To ${to}`,
-        stationOwner: to,
         addCaseDate: lockedInDate,
         due: finalDue,
         systemDue,
@@ -19954,11 +19791,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: "",
         sla: totalSla,
         delayReason: "",
-        action: "Draft Created",
-        actionReasonType: baseRemark ? "Additional note >> Remark" : "",
-        actionReason: baseRemark,
-        actionReasonTypeTh: baseRemark ? "ข้อมูลประกอบ >> หมายเหตุ" : "",
-        actionReasonTypeEn: baseRemark ? "Additional note >> Remark" : ""
+        action: "Draft Created"
       });
       upsertDashboardData(contract);
       selectedContractIndex = contracts.length - 1;
@@ -20061,11 +19894,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: "",
         sla: 1,
         delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
-        action: "Due Date Adjustment Requested",
-        actionReasonType: "Reason for Due Date Adjustment",
-        actionReason: reason,
-        actionReasonTypeTh: "เหตุผลในการขอปรับ Due Date",
-        actionReasonTypeEn: "Reason for Due Date Adjustment"
+        action: "Due Date Adjustment Requested"
       });
 
       const draft = buildDueApprovalEmailDraft(request, contract);
@@ -20116,21 +19945,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.stage = action;
       contract.cycle = nextCycle;
       contract.returns = nextReturns;
+      contract.alert = alert;
       contract.station = `From ${from} >> To ${to}`;
-      contract.stationOwner = to;
+      contract.days = days;
+      contract.used = Number(contract.used || 0) + days;
+      contract.balance = Number(contract.totalSla || 0) - Number(contract.used || 0);
+      contract.status = calculateContractStatus(action, contract.used, contract.totalSla);
       contract.remark = actionReasonInput || delayReason || correctiveAction || contract.remark;
       if (!await uploadQueuedAttachmentsToCloud()) return;
-
-      // Close out the log leg that is ending now. Without this, the previous log row keeps
-      // an empty Out Date, so calculateDaysOnHand() re-counts it live (start date -> today)
-      // every time totals are recalculated, on top of the days added for the new leg below.
-      // That double counting was the "Longest pending on hand" bug: the same span got summed
-      // once as a still-open row and again as the newly logged leg.
-      const previousOpenLog = latestLogFor(contractId);
-      if (previousOpenLog && !String(previousOpenLog[7] || "").trim()) {
-        previousOpenLog[7] = runtimeIn;
-        recalculateLogTiming(previousOpenLog);
-      }
 
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === contractId).length + 1;
@@ -20172,9 +19994,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
-      // Recompute used/days/balance/status/alert from the full (now correctly closed) log
-      // history instead of adding on top of a possibly-already-live-counted total.
-      syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === contractId);
       selectedLogContractId = contractId;
@@ -20219,9 +20038,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const closeDate = String(form.get("closeDate") || todayInputValue());
       const stage = form.get("stage");
       const to = String(form.get("to") || "").trim();
-      const previousStationLog = latestStationLogFor(id);
-      const previousStationOwner = previousStationLog?.[5] || contract.stationOwner || stationParts(contract.station).to || owner;
-      const previousStation = previousStationLog?.[3] || contract.station || `From ${owner} >> To ${previousStationOwner}`;
       syncCloseRecipientEmail(true);
       const toEmail = String(document.querySelector("#closeToEmail")?.value || "").trim();
       if (!toEmail) {
@@ -20229,19 +20045,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         showToast("Select a recipient with a valid email. / กรุณาเลือกผู้รับที่มีอีเมลถูกต้อง");
         return;
       }
+      const alert = calculateAlert(stage, 0, 0);
       contract.stage = stage;
       contract.owner = owner;
-      contract.station = previousStation;
-      contract.stationOwner = previousStationOwner;
-
-      // Close out the log leg that is ending now (same fix as Update Status): otherwise the
-      // previous row's empty Out Date keeps getting re-counted as live days forever, even
-      // after the case is closed, inflating totals the next time logs are recalculated.
-      const previousOpenLog = latestLogFor(id);
-      if (previousOpenLog && !String(previousOpenLog[7] || "").trim()) {
-        previousOpenLog[7] = closeDate;
-        recalculateLogTiming(previousOpenLog);
-      }
+      contract.status = alert;
+      contract.alert = alert;
+      contract.station = `From ${owner} >> To ${owner}`;
+      contract.days = 0;
+      contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
       const logId = `LOG-${id.replace(/\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
@@ -20258,7 +20069,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         cycle: contract.cycle,
         station: contract.station,
         from: owner,
-        to: previousStationOwner,
+        to: owner,
         inDate: closeDate,
         outDate: closeDate,
         sla: 0,
@@ -20268,10 +20079,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
-      // Recompute used/days/balance/status/alert from the full log history in one consistent
-      // pass instead of hand-setting them (days naturally comes out 0 since In = Out = closeDate).
-      syncContractTimingFromLogs(contract);
-      contract.balance = Math.max(0, Number(contract.balance || 0));
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === id);
       selectedLogContractId = id;
@@ -21328,6 +21135,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     initializeLoginGateway();
     checkEmailEndpointHealth();
+
+    let lastSlaCalculationDate = todayInputValue();
+    window.setInterval(() => {
+      const currentCalculationDate = todayInputValue();
+      if (currentCalculationDate === lastSlaCalculationDate) return;
+      lastSlaCalculationDate = currentCalculationDate;
+      if (currentUser) renderAll();
+    }, 60000);
 
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape") return;
