@@ -4201,10 +4201,22 @@
       margin-bottom: 3px;
     }
 
-    .compact-contract-head > strong {
+    .compact-contract-link {
+      appearance: none;
+      padding: 0;
+      border: 0;
+      background: transparent;
       color: var(--t23-black);
       font-size: 10px;
       font-weight: 950;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+
+    .compact-contract-link:hover,
+    .compact-contract-link:focus-visible {
+      color: var(--green-dark);
     }
 
     .compact-contract-head > span {
@@ -6764,7 +6776,7 @@
               <div class="panel-header">
                 <div>
                   <h2>7. By Person — Station Owner Status Summary</h2>
-                  <small>Horizontal stacked bars by Contract Owner · sorted high to low by Delayed + Overdue</small>
+                  <small>Horizontal stacked bars by Contract Owner · sorted high to low by Delayed + At Risk</small>
                 </div>
               </div>
               <div class="chart-body" id="personAlertChart"></div>
@@ -6774,7 +6786,7 @@
               <div class="panel-header">
                 <div>
                   <h2>8. By Dept — Station Owner Status Summary</h2>
-                  <small>Horizontal stacked bars by Department · sorted high to low by Delayed + Overdue</small>
+                  <small>Horizontal stacked bars by Department · sorted high to low by Delayed + At Risk</small>
                 </div>
               </div>
               <div class="chart-body" id="deptAlertChart"></div>
@@ -13870,6 +13882,24 @@
       showToast(`Log View: ${selectedLogContractId}`);
     }
 
+    function showContractStatusDetail(contractId) {
+      const contract = contracts.find(item => item.id === contractId);
+      if (!contract || !contractsVisibleToCurrentUser().some(item => item.id === contractId)) {
+        showToast("Contract not available for your access level.");
+        return false;
+      }
+      selectedContractIndex = contracts.findIndex(item => item.id === contractId);
+      setView(isConfidentialContract(contract) ? "confidential" : "contracts");
+      const contractIdFilter = document.querySelector("#contractIdFilter");
+      if (contractIdFilter && [...contractIdFilter.options].some(option => option.value === contractId)) {
+        contractIdFilter.value = contractId;
+        renderContractsTable();
+      }
+      document.querySelector("#contractRows")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      showToast(`Contract Details: ${contractId}`);
+      return true;
+    }
+
     function formatDate(value) {
       return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
     }
@@ -13950,23 +13980,20 @@
       const yellowLabel = options.yellowLabel || "Delayed";
       const redLabel = options.redLabel || "At Risk";
       const rows = labels.map(item => {
-        const greenCount = countFn(item.value, "G");
         const yellowCount = countFn(item.value, "Y");
         const redCount = countFn(item.value, "R");
         return {
           label: item.label,
-          greenCount,
           yellowCount,
           redCount,
           priorityTotal: yellowCount + redCount,
-          total: greenCount + yellowCount + redCount
+          total: yellowCount + redCount
         };
       }).filter(row => row.total > 0)
         .sort((a, b) =>
           b.priorityTotal - a.priorityTotal ||
           b.redCount - a.redCount ||
           b.yellowCount - a.yellowCount ||
-          b.greenCount - a.greenCount ||
           a.label.localeCompare(b.label, "en", { sensitivity: "base" })
         );
 
@@ -13979,15 +14006,13 @@
         <div class="horizontal-status-chart">
           ${rows.map(row => {
             const totalWidth = Math.max(4, (row.total / maxTotal) * 100);
-            const greenWidth = row.total ? (row.greenCount / row.total) * 100 : 0;
             const yellowWidth = row.total ? (row.yellowCount / row.total) * 100 : 0;
             const redWidth = row.total ? (row.redCount / row.total) * 100 : 0;
             return `
-              <div class="horizontal-status-row" title="${escapeHtml(row.label)}: On Track ${row.greenCount}, ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
+              <div class="horizontal-status-row" title="${escapeHtml(row.label)}: ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
                 <div class="horizontal-status-label">${escapeHtml(row.label)}</div>
                 <div class="horizontal-status-track">
                   <div class="horizontal-status-stack" style="width:${totalWidth}%">
-                    ${row.greenCount > 0 ? `<div class="horizontal-status-segment on-track" style="width:${greenWidth}%" aria-label="On Track ${row.greenCount}">${row.greenCount}</div>` : ""}
                     ${row.yellowCount > 0 ? `<div class="horizontal-status-segment delayed" style="width:${yellowWidth}%" aria-label="${escapeHtml(yellowLabel)} ${row.yellowCount}">${row.yellowCount}</div>` : ""}
                     ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
                   </div>
@@ -13997,7 +14022,6 @@
           }).join("")}
         </div>
         <div class="horizontal-status-legend">
-          <span><span class="legend-swatch on-track"></span>G = On Track</span>
           <span><span class="legend-swatch delayed"></span>Y = ${escapeHtml(yellowLabel)}</span>
           <span><span class="legend-swatch overdue"></span>R = ${escapeHtml(redLabel)}</span>
         </div>`;
@@ -14115,7 +14139,7 @@
               <tr>
                 <th>Contract Details</th>
                 <th>Ownership</th>
-                <th class="compact-days-col">Days from Add Case</th>
+                <th class="compact-days-col">Day</th>
               </tr>
             </thead>
             <tbody>
@@ -14123,7 +14147,7 @@
                 <tr>
                   <td class="compact-contract-cell">
                     <div class="compact-contract-head">
-                      <strong>${escapeHtml(row.id)}</strong>
+                      <button class="compact-contract-link" type="button" data-dashboard-contract-id="${escapeHtml(row.id)}" title="Open ${escapeHtml(row.id)} in Contracts">${escapeHtml(row.id)}</button>
                       <span>R = Overdue</span>
                     </div>
                     <div class="compact-contract-name">${escapeHtml(row.name)}</div>
@@ -14142,20 +14166,24 @@
           </table>
         </div>
         <div class="compact-panel-foot"><span class="badge red">R = Overdue</span> ${longestPendingOnHand.length} Contracts</div>` : `<div class="empty-state">No R = Overdue contracts</div>`;
+      document.querySelectorAll("[data-dashboard-contract-id]").forEach(button => {
+        button.addEventListener("click", () => showContractStatusDetail(button.dataset.dashboardContractId));
+      });
 
       // Mockup chart data aggregated from the 27 Turtle 23 employee records embedded in this file.
       const aggregateStatus = (items, keySelector) => {
         const map = new Map();
         items.filter(item => item.isPending === 1).forEach(item => {
           const key = keySelector(item) || "Unassigned";
-          const current = map.get(key) || { label: key, delayed: 0, overdue: 0 };
-          if (item.alertCode === "Y") current.delayed += 1;
-          if (item.alertCode === "R") current.overdue += 1;
+          const current = map.get(key) || { label: key, onTrack: 0, delayed: 0, overdue: 0 };
+          if (item.statusCode === "G") current.onTrack += 1;
+          if (item.statusCode === "Y") current.delayed += 1;
+          if (item.statusCode === "R") current.overdue += 1;
           map.set(key, current);
         });
         return [...map.values()]
-          .filter(item => item.delayed > 0 || item.overdue > 0)
-          .sort((a, b) => (b.delayed + b.overdue) - (a.delayed + a.overdue) || b.overdue - a.overdue || b.delayed - a.delayed || a.label.localeCompare(b.label));
+          .filter(item => item.onTrack > 0 || item.delayed > 0 || item.overdue > 0)
+          .sort((a, b) => (b.delayed + b.overdue) - (a.delayed + a.overdue) || b.overdue - a.overdue || b.delayed - a.delayed || b.onTrack - a.onTrack || a.label.localeCompare(b.label));
       };
 
       const mockDeptContractStatus = aggregateStatus(contractStatusData, item => item.department);
@@ -14164,7 +14192,7 @@
       const mockStatusCount = (rows, label, alertCode) => {
         const row = rows.find(item => item.label === label);
         if (!row) return 0;
-        return alertCode === "Y" ? row.delayed : alertCode === "R" ? row.overdue : 0;
+        return alertCode === "G" ? row.onTrack : alertCode === "Y" ? row.delayed : alertCode === "R" ? row.overdue : 0;
       };
 
       document.querySelector("#deptAlertChart").innerHTML = `
@@ -18293,7 +18321,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       "Remark",
       "Access Level",
       "Visibility",
-      "Category"
+      "Category",
+      "Pending Due Date Request"
     ];
 
     const logDatabaseHeaders = [
@@ -18431,8 +18460,27 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         "Remark": item.remark,
         "Access Level": item.accessLevel || accessLevelForContractType(item.type),
         "Visibility": item.visibility || "",
-        "Category": item.category || contractTypeCategoryFor(item.type)
+        "Category": item.category || contractTypeCategoryFor(item.type),
+        "Pending Due Date Request": dueDateRequestForStorage(item.pendingDueDateRequest)
       };
+    }
+
+    function dueDateRequestForStorage(request) {
+      if (!request || typeof request !== "object") return "";
+      return {
+        ...request,
+        attachments: (request.attachments || []).map(({ base64, ...attachment }) => attachment)
+      };
+    }
+
+    function parsePendingDueDateRequest(value) {
+      if (!value) return null;
+      try {
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
+        return parsed && typeof parsed === "object" && parsed.requestId ? parsed : null;
+      } catch (error) {
+        return null;
+      }
     }
 
     function contractFromDbRow(row) {
@@ -18444,6 +18492,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const totalSla = Number(row["Total SLA"] || totalSlaFor(type)) || 0;
       const used = Number(row["Days Used"] || row["Days on Hand"] || 0) || 0;
       const accessLevel = String(row["Access Level"] || accessLevelForContractType(type) || "Normal").trim();
+      const pendingDueDateRequest = parsePendingDueDateRequest(row["Pending Due Date Request"]);
       return {
         id,
         name: String(row["Contract Name"] || "").trim(),
@@ -18468,8 +18517,78 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         remark: String(row["Remark"] || "").trim(),
         accessLevel,
         visibility: String(row["Visibility"] || (accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป")).trim(),
-        category: String(row["Category"] || contractTypeCategoryFor(type)).trim()
+        category: String(row["Category"] || contractTypeCategoryFor(type)).trim(),
+        pendingDueDateRequest
       };
+    }
+
+    function refreshDueDateRequestsFromContracts(sourceContracts = contracts) {
+      const requestsById = new Map(
+        dueDateAdjustmentRequests
+          .filter(request => !String(request.status || "").startsWith("Pending"))
+          .map(request => [request.requestId, request])
+      );
+      sourceContracts.forEach(contract => {
+        const request = contract.pendingDueDateRequest;
+        if (request?.requestId) requestsById.set(request.requestId, { ...request, contractId: request.contractId || contract.id });
+      });
+      dueDateAdjustmentRequests.splice(0, dueDateAdjustmentRequests.length, ...requestsById.values());
+    }
+
+    function recoverPendingDueDateRequestsFromLogs(sourceContracts = contracts, sourceLogs = logRecords) {
+      const contractsById = new Map(sourceContracts.map(contract => [contract.id, contract]));
+      const existingPendingContracts = new Set(
+        dueDateAdjustmentRequests
+          .filter(request => String(request.status || "").startsWith("Pending"))
+          .map(request => request.contractId)
+      );
+      sourceContracts.forEach(contract => {
+        if (contract.pendingDueDateRequest?.requestId) existingPendingContracts.add(contract.id);
+      });
+      const latestDecisionIndex = new Map();
+      sourceLogs.forEach((row, index) => {
+        if (["Due Date Approved and Applied", "Due Date Request Rejected", "Due Date More Information Requested"].includes(String(row?.[12] || ""))) {
+          latestDecisionIndex.set(String(row?.[0] || ""), index);
+        }
+      });
+      let recovered = 0;
+      for (let index = sourceLogs.length - 1; index >= 0; index -= 1) {
+        const row = sourceLogs[index];
+        const contractId = String(row?.[0] || "").trim();
+        if (String(row?.[12] || "") !== "Due Date Adjustment Requested"
+          || existingPendingContracts.has(contractId)
+          || index <= (latestDecisionIndex.get(contractId) ?? -1)) continue;
+        const contract = contractsById.get(contractId);
+        if (!contract) continue;
+        const detail = String(row?.[11] || "");
+        const match = detail.match(/Requested Due Date\s+(\d{4}-\d{2}-\d{2})\s*:\s*(.*)/i);
+        const requestedDue = match?.[1] || "";
+        if (!requestedDue) continue;
+        const logKey = String(row?.[1] || index + 1).replace(/[^A-Za-z0-9]+/g, "");
+        const request = {
+          requestId: `DDR-REC-${contractId.replace(/[^A-Za-z0-9]+/g, "")}-${logKey}`,
+          contractId,
+          systemDue: contract.systemDue || "",
+          currentDue: contract.due || "",
+          requestedDue,
+          requestType: "Extension",
+          reason: match?.[2]?.trim() || detail || "Recovered from Due Date request log",
+          attachments: [],
+          requestedBy: String(row?.[4] || contract.owner || "User"),
+          requestedByEmail: emailForPerson(row?.[4]) || emailForPerson(contract.owner) || "",
+          approver: "System Administrator",
+          approverEmail: "admin@turtle23.com",
+          requestedAt: String(row?.[6] || ""),
+          currentBalance: Number(contract.balance || 0),
+          currentAlert: contract.alert || contract.status || "",
+          status: "Pending Admin Review",
+          recoveredFromLog: true
+        };
+        contract.pendingDueDateRequest = request;
+        existingPendingContracts.add(contractId);
+        recovered += 1;
+      }
+      return recovered;
     }
 
     function logDbRow(row) {
@@ -18743,13 +18862,32 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const migratedDepartmentCount = migrateDepartmentMasterToCurrentVersion(payload.departmentDataVersion || "");
       const migratedActionCount = migrateActionMasterToCurrentVersion(payload.actionDataVersion || "");
       if (!contractText) return false;
+      const cloudSupportsPendingDueRequests = (parseCsvRows(contractText)[0] || []).includes("Pending Due Date Request");
       const cloudContracts = csvToObjects(contractText).map(contractFromDbRow).filter(item => item.id && item.name);
       cloudContracts.forEach(item => { item.department = canonicalDepartmentName(item.department); });
+      let migratedPendingDueRequestCount = 0;
+      if (!cloudSupportsPendingDueRequests) {
+        const localPendingRequests = new Map(
+          dueDateAdjustmentRequests
+            .filter(request => String(request.status || "").startsWith("Pending"))
+            .map(request => [request.contractId, request])
+        );
+        cloudContracts.forEach(contract => {
+          const pendingRequest = localPendingRequests.get(contract.id);
+          if (!pendingRequest) return;
+          contract.pendingDueDateRequest = { ...pendingRequest };
+          migratedPendingDueRequestCount += 1;
+        });
+      }
       const cloudLogs = logText ? csvToObjects(logText).map(logFromDbRow).filter(row => String(row?.[0] || "").trim()) : [];
       const migratedCount = cloudContracts.length ? migrateContractIdsToDepartmentFormat(cloudContracts, cloudLogs) : 0;
       isApplyingDriveDatabaseLoad = true;
       contracts.splice(0, contracts.length, ...cloudContracts);
       logRecords.splice(0, logRecords.length, ...cloudLogs);
+	      if (!cloudSupportsPendingDueRequests) {
+	        migratedPendingDueRequestCount += recoverPendingDueDateRequestsFromLogs(cloudContracts, cloudLogs);
+	      }
+	      refreshDueDateRequestsFromContracts(cloudContracts);
 	      localStorage.setItem(localDatabaseKey, JSON.stringify({
 	        savedAt: localIsoDateTime(),
 	        standardSlaDataVersion,
@@ -18757,12 +18895,13 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        actionDataVersion,
 	        contracts,
 	        logRecords,
+	        dueDateAdjustmentRequests,
 	        masterData
 	      }));
       isApplyingDriveDatabaseLoad = false;
-      if (migratedSlaCount || migratedDepartmentCount || migratedActionCount) scheduleDriveDatabaseSave();
+      if (migratedSlaCount || migratedDepartmentCount || migratedActionCount || migratedPendingDueRequestCount) scheduleDriveDatabaseSave();
       refreshDatabaseDrivenUi();
-      updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
+      updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}${migratedPendingDueRequestCount ? ` · ${migratedPendingDueRequestCount} Due Date request migrated` : ""}`);
       return true;
     }
 
@@ -19900,7 +20039,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
 
       const draft = buildDueApprovalEmailDraft(request, contract);
-      saveContractsDatabase();
+      saveContractsDatabase({ syncCloud: false });
+      await saveDriveDatabaseToCloud();
       renderAll();
       setView("user");
       syncDueDateAdjustmentForm(true);
@@ -20724,6 +20864,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         requireSystemAdministrator("Access Denied: Only the System Administrator can approve and apply due date adjustments.");
         return;
       }
+      refreshDueDateRequestsFromContracts(contracts);
       const queue = document.querySelector("#dueApprovalQueueRows");
       if (queue) queue.innerHTML = dueDateAdjustmentRequests.length ? dueDateAdjustmentRequests.slice().reverse().map(request => `
         <tr data-admin-request-id="${escapeHtml(request.requestId)}"><td>${escapeHtml(request.requestId)}</td><td>${escapeHtml(request.contractId)}</td><td><input class="master-input" type="date" data-admin-request-field="requestedDue" value="${escapeHtml(request.requestedDue || "")}"></td><td><input class="master-input" type="text" data-admin-request-field="requestedBy" value="${escapeHtml(request.requestedBy || "")}"></td><td><select class="master-input" data-admin-request-field="status">${[...new Set([request.status || "Pending", "Pending", "Approved and Applied", "Rejected", "More Information Requested"])].map(status => `<option value="${status}"${status === request.status ? " selected" : ""}>${status}</option>`).join("")}</select></td><td><button class="secondary-button" type="button" data-review-due-request="${escapeHtml(request.requestId)}">Review</button></td></tr>`).join("") : '<tr><td colspan="6">No Due Date requests</td></tr>';
