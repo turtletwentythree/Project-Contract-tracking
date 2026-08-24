@@ -14081,7 +14081,7 @@
             department: item.department || contract.department || "-",
             contractOwner: item.owner || contract.owner || "Unassigned",
             stationOwner,
-            pendingDays: Number(item.pendingDays) || Number(contract.days) || 0
+            pendingDays: Number(item.pendingDays) || 0
           };
         })
         .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));
@@ -14115,7 +14115,7 @@
               <tr>
                 <th>Contract Details</th>
                 <th>Ownership</th>
-                <th class="compact-days-col">Days</th>
+                <th class="compact-days-col">Days from Add Case</th>
               </tr>
             </thead>
             <tbody>
@@ -16407,6 +16407,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     function upsertDashboardData(item) {
       const closed = !isPendingContract(item);
       const closeDate = latestCloseDate(item.id);
+      const addCaseDate = addCaseStartDateForContract(item);
+      const daysFromAddCase = addCaseDate ? calculateDaysOnHand(addCaseDate, todayInputValue()) : Number(item.used || 0);
       const record = {
         id: item.id,
         name: item.name,
@@ -16422,7 +16424,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         isOverdue: !closed && statusCodeFor(item.status) === "R" ? 1 : 0,
         currentTo: stationParts(item.station).to,
         deptBucket: deptBucketFor(item),
-        pendingDays: closed ? 0 : item.days
+        pendingDays: closed ? 0 : daysFromAddCase
       };
       const index = dashboardData.findIndex(row => row.id === item.id);
       if (index >= 0) dashboardData[index] = record;
