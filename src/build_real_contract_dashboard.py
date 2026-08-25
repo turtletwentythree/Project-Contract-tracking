@@ -3207,7 +3207,7 @@ def main():
                 <div class="panel-header">
                   <div>
                     <h2>People / Owner Master</h2>
-                    <small>Add, edit, or delete Owner rows used by To, CC and email lookup</small>
+                    <small>Add, edit, or delete Owner rows used by email and LINE lookup</small>
                   </div>
                   <div class="master-data-actions">
                     <button class="secondary-button" type="button" data-master-import="people">Import</button>
@@ -3217,7 +3217,7 @@ def main():
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Name</th><th>Department</th><th>Email</th><th>Company</th><th>Active</th><th></th></tr></thead>
+                    <thead><tr><th>Name</th><th>Department</th><th>Email</th><th>LINE User ID</th><th>LINE Alert</th><th>Company</th><th>Active</th><th></th></tr></thead>
                     <tbody id="masterPeopleRows"></tbody>
                   </table>
                 </div>
@@ -5661,7 +5661,7 @@ def main():
     }
 
     function peopleMasterCsvText() {
-      return objectsToCsv(["company", "department", "name", "email", "active"], masterData.people || []);
+      return objectsToCsv(["company", "department", "name", "email", "lineUserId", "lineNotifications", "active"], masterData.people || []);
     }
 
 	    function contractTemplateCsvText() {
@@ -6018,7 +6018,7 @@ def main():
         return { filename: "master_department_rows.csv", headers: ["Department / Restaurant", "Department Code", "Department Data Version", "Active"], rows: masterData.departments || [] };
       }
       if (kind === "people") {
-        return { filename: "master_people_owner_rows.csv", headers: ["company", "department", "name", "email", "active"], rows: masterData.people || [] };
+        return { filename: "master_people_owner_rows.csv", headers: ["company", "department", "name", "email", "lineUserId", "lineNotifications", "active"], rows: masterData.people || [] };
       }
       if (kind === "contractTypes") {
         return { filename: "master_type_of_contract_rows.csv", headers: ["Contract Classification", "Type of Contract", "Sub Type of Contract", "Fixed SLA (Working Days)", "Standard SLA Version", "Active", "Category", "Description / คำอธิบาย"], rows: masterData.contractTypes || [] };
@@ -6109,7 +6109,7 @@ def main():
         }).filter(row => row["Department / Restaurant"] && row["Department Code"]);
         result = upsertRowsByKey(masterData.departments, imported, row => normalizeDirectoryValue(row["Department / Restaurant"]));
       } else if (kind === "people") {
-        const imported = rows.map(row => ({ ...row, company: row.company || "Turtle 23", email: String(row.email || "").trim().toLowerCase(), active: row.active || "Yes" })).filter(row => row.name);
+        const imported = rows.map(row => ({ ...row, company: row.company || "Turtle 23", email: String(row.email || "").trim().toLowerCase(), lineUserId: String(row.lineUserId || row["LINE User ID"] || "").trim(), lineNotifications: row.lineNotifications || row["LINE Alert"] || "Yes", active: row.active || "Yes" })).filter(row => row.name);
         result = upsertRowsByKey(masterData.people, imported, row => normalizeDirectoryValue(row.email || row.name));
       } else if (kind === "contractTypes") {
         const imported = rows.map(row => ({
@@ -6296,6 +6296,8 @@ def main():
             <td>${masterInput("name", row.name)}</td>
             <td>${masterInput("department", row.department)}</td>
             <td>${masterInput("email", row.email)}</td>
+            <td>${masterInput("lineUserId", row.lineUserId)}</td>
+            <td>${masterActiveSelect("lineNotifications", row.lineNotifications || "Yes")}</td>
             <td>${masterInput("company", row.company)}</td>
             <td>${masterActiveSelect("active", row.active)}</td>
             <td>${masterDeleteButton()}</td>
@@ -6581,8 +6583,8 @@ def main():
 	          return { ...row, "Department / Restaurant": department, "Department Code": code, "Department Data Version": departmentDataVersion, Active: row.Active || "Yes" };
 	        })
 	        .filter(row => row["Department / Restaurant"] && row["Department / Restaurant"] !== "0" && row["Department Code"] && row["Department Code"] !== "0");
-      masterData.people = readMasterRows("#masterPeopleRows", ["company", "department", "name", "email", "active"], "name")
-        .map(row => ({ ...row, email: String(row.email || "").trim().toLowerCase(), active: row.active || "Yes" }));
+      masterData.people = readMasterRows("#masterPeopleRows", ["name", "department", "email", "lineUserId", "lineNotifications", "company", "active"], "name")
+        .map(row => ({ ...row, email: String(row.email || "").trim().toLowerCase(), lineUserId: String(row.lineUserId || "").trim(), lineNotifications: row.lineNotifications || "Yes", active: row.active || "Yes" }));
 	      masterData.contractTypes = readMasterRows("#masterContractTypeRows", ["Contract Classification", "Type of Contract", "Sub Type of Contract", "Fixed SLA (Working Days)", "Active"], "Contract Classification")
 	        .filter(row => String(row["Type of Contract"] || row["Sub Type of Contract"] || "").trim())
 	        .map(row => ({
@@ -6636,7 +6638,7 @@ def main():
         logRecords.at(-1)[1] = nextLogNo;
       }
       if (kind === "departments") masterData.departments.push({ "Department / Restaurant": "", "Department Code": "", "Department Data Version": departmentDataVersion, Active: "Yes" });
-	      if (kind === "people") masterData.people.push({ company: "Turtle 23", department: "", name: "", email: "", active: "Yes" });
+	      if (kind === "people") masterData.people.push({ company: "Turtle 23", department: "", name: "", email: "", lineUserId: "", lineNotifications: "Yes", active: "Yes" });
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
 	      if (kind === "actionSla") masterData.actionSla.push({ Action: "Submit to Review", "Description / รายละเอียด": actionDescriptionConfig["Submit to Review"].descriptionTh, "Fixed SLA (Working Days)": "", "SLA Rule / วิธีนับ": actionDescriptionConfig["Submit to Review"].slaRuleTh, "Action Data Version": actionDataVersion, Active: "Yes" });
 	      if (kind === "contractTemplates") masterData.contractTemplates.push({ classification: "Day-to-day Work / งานดำเนินงานทั่วไป", typeGroup: "", subType: "", name: "", selectionLabel: "", sourceRow: "", type: "", workType: "", contractId: "", accessLevel: "Normal", category: "Day-to-day Work / งานดำเนินงานทั่วไป", department: "", vendor: "", group: "", fixedSla: "", slaVersion: standardSlaDataVersion, active: "Yes" });
@@ -8496,6 +8498,10 @@ def main():
     .due-approver-select-field, .due-approver-detail-field { display: none !important; }
     .admin-rights-table td:first-child, .admin-rights-table th:first-child { white-space: nowrap; }
     .password-validation-message { min-height: 18px; color: #b42318; font-size: 11px; }
+    .line-notification-config { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .line-message-preview { min-width: 260px; max-width: 420px; white-space: pre-line; font-size: 10px; line-height: 1.45; }
+    .line-recipient-id { max-width: 170px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+    .line-queue-status { white-space: nowrap; }
     @media (max-width: 820px) {
       .admin-workflow-grid > .form-field, .admin-workflow-grid > .span-6 { grid-column: 1 / -1; }
       .admin-summary-band { grid-template-columns: 1fr; }
@@ -8672,6 +8678,30 @@ def main():
                     <tbody id="dueAdjustmentHistoryRows"></tbody>
                   </table>
                 </div>
+              </section>
+
+              <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="lineNotificationPanel" data-admin-only hidden>
+                <div class="panel-header">
+                  <div>
+                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Local Preview</span></h2>
+                    <small>ตัวอย่างการแจ้งเตือน Status Update Y/R ไปยัง Contract Owner ยังไม่ส่งจริง</small>
+                  </div>
+                  <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
+                </div>
+                <div class="line-notification-config">
+                  <span class="badge amber">Trigger Y=Delayed</span>
+                  <span class="badge red">Trigger R=Overdue</span>
+                  <span class="badge black">Recipient Contract Owner</span>
+                  <span class="badge green">Schedule Daily 09:00 Asia/Bangkok</span>
+                  <span class="badge black">Max 1 notification per Contract / Day</span>
+                </div>
+                <div class="table-wrap">
+                  <table class="master-table">
+                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE User ID</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
+                    <tbody id="lineNotificationPreviewRows"></tbody>
+                  </table>
+                </div>
+                <small id="lineNotificationPreviewSummary">Local Preview only</small>
               </section>
 
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="passwordManagementPanel" data-admin-only hidden>
@@ -9252,6 +9282,77 @@ def main():
       return (request.attachments || []).map(item => item.originalFileName || item.fileName).filter(Boolean).join(", ") || "-";
     }
 
+    function lineOwnerRecord(ownerName) {
+      const normalizedOwner = normalizeDirectoryValue(ownerName);
+      return allPeopleDirectory().find(person => normalizeDirectoryValue(person.name) === normalizedOwner) || null;
+    }
+
+    function lineNotificationMessage(contract, statusCode) {
+      const status = statusCode === "R"
+        ? { en: "Overdue", th: "เกิน SLA รวม" }
+        : { en: "Delayed", th: "ถึงช่วงติดตาม SLA รวม" };
+      const contractName = isConfidentialContract(contract) ? "Confidential Contract / สัญญาลับ" : contract.name;
+      return [
+        `[${statusCode}] Contract Status Update: ${status.en}`,
+        `สถานะสัญญา: ${status.th}`,
+        "",
+        `Contract ID: ${contract.id}`,
+        `Contract Name: ${contractName}`,
+        `Contract Owner: ${contract.owner || "-"}`,
+        `Total SLA: ${Number(contract.totalSla || 0)} Working Days`,
+        `Accumulated Days: ${Number(contract.used || 0)} Working Days`,
+        `Due Date: ${contract.due ? formatDate(contract.due) : "-"}`,
+        "",
+        statusCode === "R"
+          ? "Please update the action plan immediately. / กรุณาอัปเดตแผนดำเนินการทันที"
+          : "Please review and update the contract status. / กรุณาตรวจสอบและอัปเดตสถานะสัญญา"
+      ].join("\n");
+    }
+
+    function buildLineStatusNotificationQueue() {
+      return contracts
+        .filter(contract => isPendingContract(contract))
+        .map(contract => {
+          const statusCode = statusCodeFor(contract.status);
+          if (!["Y", "R"].includes(statusCode)) return null;
+          const ownerRecord = lineOwnerRecord(contract.owner);
+          const lineUserId = String(ownerRecord?.lineUserId || "").trim();
+          const enabled = isMasterActive(ownerRecord?.lineNotifications || "Yes");
+          return {
+            contractId: contract.id,
+            contractName: contract.name,
+            owner: contract.owner || "Unassigned",
+            lineUserId,
+            statusCode,
+            statusLabel: statusCode === "R" ? "R = Overdue" : "Y = Delayed",
+            confidential: isConfidentialContract(contract),
+            message: lineNotificationMessage(contract, statusCode),
+            ready: Boolean(lineUserId && enabled),
+            delivery: !ownerRecord ? "Owner not found in People Master" : !enabled ? "LINE Alert disabled" : !lineUserId ? "Missing LINE User ID" : "Ready for automatic LINE"
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.statusCode.localeCompare(a.statusCode) || a.owner.localeCompare(b.owner) || a.contractId.localeCompare(b.contractId));
+    }
+
+    function renderLineStatusNotificationPreview() {
+      const rowsNode = document.querySelector("#lineNotificationPreviewRows");
+      const summaryNode = document.querySelector("#lineNotificationPreviewSummary");
+      if (!rowsNode || !summaryNode) return;
+      const queue = buildLineStatusNotificationQueue();
+      rowsNode.innerHTML = queue.length ? queue.map(item => `
+        <tr>
+          <td><strong>${escapeHtml(item.contractId)}</strong><small style="display:block;color:var(--muted)">${escapeHtml(item.confidential ? "Confidential Contract" : item.contractName)}</small></td>
+          <td>${escapeHtml(item.owner)}</td>
+          <td><div class="line-recipient-id">${escapeHtml(item.lineUserId || "-")}</div></td>
+          <td>${contractStatusBadge(item.statusLabel)}</td>
+          <td><div class="line-message-preview">${escapeHtml(item.message)}</div></td>
+          <td class="line-queue-status"><span class="badge ${item.ready ? "green" : "amber"}">${escapeHtml(item.delivery)}</span></td>
+        </tr>`).join("") : '<tr><td colspan="6">No Y/R Status Update notifications</td></tr>';
+      const readyCount = queue.filter(item => item.ready).length;
+      summaryNode.textContent = `Local Preview only · ${queue.length} notification(s) · ${readyCount} ready · ${queue.length - readyCount} require LINE User ID or configuration`;
+    }
+
     function renderDueDateApprovalQueue() {
       if (!isSystemAdministrator()) {
         requireSystemAdministrator("Access Denied: Only the System Administrator can approve and apply due date adjustments.");
@@ -9527,6 +9628,7 @@ def main():
       if (!admin) return;
       renderPasswordManagement();
       renderDueDateApprovalQueue();
+      renderLineStatusNotificationPreview();
     }
 
     function setupAdministrativeControls() {
@@ -9535,6 +9637,10 @@ def main():
       document.querySelector("#passwordManagementForm")?.addEventListener("submit", event => { event.preventDefault(); changeManagedPassword(event.currentTarget); });
       document.querySelector("#resetPasswordBtn")?.addEventListener("click", resetManagedPassword);
       document.querySelector("#unlockAccountBtn")?.addEventListener("click", unlockManagedAccount);
+      document.querySelector("#refreshLineNotificationPreview")?.addEventListener("click", () => {
+        renderLineStatusNotificationPreview();
+        showToast("LINE notification preview refreshed. / อัปเดตตัวอย่างการแจ้งเตือนแล้ว");
+      });
       document.querySelector("#dueApprovalQueueRows")?.addEventListener("click", event => {
         const button = event.target.closest("[data-review-due-request]");
         if (button) openDueDateApprovalRequest(button.dataset.reviewDueRequest);
@@ -9630,6 +9736,11 @@ def main():
     html = html.replace(
         'get dueDateAdjustmentRequests() { return dueDateAdjustmentRequests; },',
         'get dueDateAdjustmentRequests() { return dueDateAdjustmentRequests.map(item => ({ ...item, attachments: (item.attachments || []).map(file => ({ ...file, base64: undefined })) })); },',
+        1,
+    )
+    html = html.replace(
+        'get dueDateAdjustmentRequests() { return dueDateAdjustmentRequests.map(item => ({ ...item, attachments: (item.attachments || []).map(file => ({ ...file, base64: undefined })) })); },',
+        'get dueDateAdjustmentRequests() { return dueDateAdjustmentRequests.map(item => ({ ...item, attachments: (item.attachments || []).map(file => ({ ...file, base64: undefined })) })); },\n      get lineStatusNotificationQueue() { return buildLineStatusNotificationQueue().map(item => ({ ...item })); },',
         1,
     )
 
@@ -9748,7 +9859,7 @@ def main():
     write_csv(OUTPUT_LOGS_CSV, log_csv_rows, log_headers)
     write_csv(OUTPUT_TYPE_MASTER_CSV, type_rows, type_headers)
     write_csv(OUTPUT_DEPARTMENT_MASTER_CSV, department_master_rows, ["Department / Restaurant", "Department Code", "Department Data Version", "Active"])
-    write_csv(OUTPUT_PEOPLE_MASTER_CSV, people_master_rows, ["company", "department", "name", "email", "active"])
+    write_csv(OUTPUT_PEOPLE_MASTER_CSV, people_master_rows, ["company", "department", "name", "email", "lineUserId", "lineNotifications", "active"])
     write_csv(OUTPUT_CONTRACT_TEMPLATE_CSV, contract_catalog, ["classification", "typeGroup", "subType", "name", "selectionLabel", "sourceRow", "type", "workType", "contractId", "accessLevel", "category", "department", "vendor", "group", "fixedSla", "slaVersion", "remark", "active"])
     write_csv(
         OUTPUT_ACTION_SLA_MASTER_CSV,
@@ -10132,6 +10243,9 @@ function jsonpResponse(data, callback) {{
 """,
         encoding="utf-8",
     )
+    canonical_apps_script = ROOT / "work" / "T23-Tracking-Contract" / "src" / "attachment_upload_apps_script.js"
+    if canonical_apps_script.exists():
+        OUTPUT_ATTACHMENT_APPS_SCRIPT.write_text(canonical_apps_script.read_text(encoding="utf-8"), encoding="utf-8")
     OUTPUT_CODE.write_text(Path(__file__).read_text(encoding="utf-8"), encoding="utf-8")
     OUTPUT_README.write_text(
         "\n".join([

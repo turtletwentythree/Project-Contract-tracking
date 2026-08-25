@@ -2,6 +2,10 @@ const DEFAULT_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ";
 const DEFAULT_DATABASE_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
+const LINE_CHANNEL_ACCESS_TOKEN_PROPERTY = "LINE_CHANNEL_ACCESS_TOKEN";
+const LINE_NOTIFICATION_TIMEZONE = "Asia/Bangkok";
+const LINE_NOTIFICATION_HOUR = 9;
+const LINE_NOTIFICATION_HANDLER = "runLineStatusNotifications";
 
 function doPost(e) {
   let requestId = "";
@@ -16,6 +20,9 @@ function doPost(e) {
       setEmailRequestStatus_(requestId, Object.assign({ state: "sent" }, result));
       return jsonResponse(result);
     }
+    if (mode === "sendLineStatusNotification") return jsonResponse(sendLineStatusNotification_(payload));
+    if (mode === "runLineStatusNotifications") return jsonResponse(runLineStatusNotifications(payload));
+    if (mode === "installLineStatusNotificationTrigger") return jsonResponse(installLineStatusNotificationTrigger_());
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
     if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
@@ -67,6 +74,7 @@ function endpointHealthCheck_() {
     attachmentFolderId: attachmentFolder.getId(),
     attachmentFolderName: attachmentFolder.getName(),
     remainingMailQuota: MailApp.getRemainingDailyQuota(),
+    lineConfigured: Boolean(PropertiesService.getScriptProperties().getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY)),
     checkedAt: new Date().toISOString()
   };
 }
@@ -255,6 +263,215 @@ function sendStatusEmail_(payload) {
     files: files,
     attachedFiles: mailAttachments.map(function(blob) { return blob.getName(); })
   };
+}
+
+function sendLineStatusNotification_(payload) {
+  const to = String(payload.to || payload.lineUserId || "").trim();
+  const message = String(payload.message || "").trim();
+  if (!to) throw new Error("Missing LINE User ID.");
+  if (!message) throw new Error("Missing LINE notification message.");
+  return pushLineMessage_(to, message);
+}
+
+function pushLineMessage_(to, message) {
+  const token = String(PropertiesService.getScriptProperties().getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY) || "").trim();
+  if (!token) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured in Script Properties.");
+  const response = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + token },
+    payload: JSON.stringify({
+      to: String(to || "").trim(),
+      messages: [{ type: "text", text: String(message || "").slice(0, 5000) }]
+    }),
+    muteHttpExceptions: true
+  });
+  const responseCode = response.getResponseCode();
+  if (responseCode < 200 || responseCode >= 300) {
+    throw new Error("LINE Messaging API returned HTTP " + responseCode + ": " + response.getContentText());
+  }
+  return {
+    success: true,
+    sent: true,
+    sentAt: new Date().toISOString(),
+    to: String(to || "").trim()
+  };
+}
+
+function runLineStatusNotifications(options) {
+  const settings = options || {};
+  const dryRun = settings.dryRun === true || String(settings.dryRun || "").toLowerCase() === "true";
+  const folder = DriveApp.getFolderById(settings.folderId || DEFAULT_DATABASE_FOLDER_ID);
+  const contracts = csvObjects_(readTextFileByName_(folder, settings.contractsCsv || "tracking_contracts_contracts_db.csv"));
+  const people = csvObjects_(readTextFileByName_(folder, settings.peopleMasterCsv || "tracking_contracts_people_master_db.csv"));
+  const owners = lineOwnerMap_(people);
+  const properties = PropertiesService.getScriptProperties();
+  const today = Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd");
+  const results = [];
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  contracts.forEach(function(contract) {
+    if (lineContractIsClosed_(contract)) return;
+    const statusCode = lineStatusCode_(contract["Status Update"]);
+    if (statusCode !== "Y" && statusCode !== "R") return;
+
+    const contractId = String(contract["Contract ID"] || "").trim();
+    const ownerName = String(contract["Contract Owner"] || "").trim();
+    const owner = owners[normalizeLineLookup_(ownerName)] || null;
+    const lineUserId = String(owner && (owner.lineUserId || owner["LINE User ID"]) || "").trim();
+    const lineEnabled = owner && masterFlagEnabled_(owner.lineNotifications || owner["LINE Alert"] || "Yes");
+    const dedupeKey = "t23_line_status_" + contractId;
+    const dedupeValue = today;
+
+    if (!contractId) {
+      skipped += 1;
+      results.push({ contractId: "", statusCode: statusCode, sent: false, reason: "Missing Contract ID." });
+      return;
+    }
+    if (!owner) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Contract Owner not found in People Master." });
+      return;
+    }
+    if (!lineEnabled) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "LINE Alert disabled for Contract Owner." });
+      return;
+    }
+    if (!lineUserId) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Missing LINE User ID." });
+      return;
+    }
+    // A contract can generate at most one LINE notification per calendar day.
+    if (!dryRun && properties.getProperty(dedupeKey) === dedupeValue) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "This contract was already sent today." });
+      return;
+    }
+
+    const message = lineNotificationMessage_(contract, statusCode);
+    if (dryRun) {
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, dryRun: true, to: lineUserId, message: message });
+      return;
+    }
+    try {
+      pushLineMessage_(lineUserId, message);
+      properties.setProperty(dedupeKey, dedupeValue);
+      sent += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: true, to: lineUserId });
+    } catch (error) {
+      failed += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: errorMessage_(error) });
+    }
+  });
+
+  return {
+    success: failed === 0,
+    dryRun: dryRun,
+    sent: sent,
+    skipped: skipped,
+    failed: failed,
+    checked: results.length,
+    runAt: new Date().toISOString(),
+    results: results
+  };
+}
+
+function previewLineStatusNotifications() {
+  return runLineStatusNotifications({ dryRun: true });
+}
+
+function installLineStatusNotificationTrigger() {
+  return installLineStatusNotificationTrigger_();
+}
+
+function installLineStatusNotificationTrigger_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction && trigger.getHandlerFunction() === LINE_NOTIFICATION_HANDLER) ScriptApp.deleteTrigger(trigger);
+  });
+  const trigger = ScriptApp.newTrigger(LINE_NOTIFICATION_HANDLER)
+    .timeBased()
+    .everyDays(1)
+    .atHour(LINE_NOTIFICATION_HOUR)
+    .inTimezone(LINE_NOTIFICATION_TIMEZONE)
+    .create();
+  return {
+    success: true,
+    installed: true,
+    handlerFunction: trigger.getHandlerFunction(),
+    hour: LINE_NOTIFICATION_HOUR,
+    timezone: LINE_NOTIFICATION_TIMEZONE
+  };
+}
+
+function csvObjects_(text) {
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  if (!source.trim()) return [];
+  const rows = Utilities.parseCsv(source);
+  if (!rows.length) return [];
+  const headers = rows.shift().map(function(header) { return String(header || "").trim(); });
+  return rows.filter(function(row) {
+    return row.some(function(value) { return String(value || "").trim(); });
+  }).map(function(row) {
+    const object = {};
+    headers.forEach(function(header, index) { object[header] = row[index] == null ? "" : row[index]; });
+    return object;
+  });
+}
+
+function lineOwnerMap_(people) {
+  const map = {};
+  (people || []).forEach(function(person) {
+    const key = normalizeLineLookup_(person.name || person.Name);
+    if (key && masterFlagEnabled_(person.active || person.Active || "Yes")) map[key] = person;
+  });
+  return map;
+}
+
+function normalizeLineLookup_(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function masterFlagEnabled_(value) {
+  return !/^(no|false|0|inactive|disabled)$/i.test(String(value == null ? "Yes" : value).trim());
+}
+
+function lineContractIsClosed_(contract) {
+  const text = [contract.Stage, contract["Status Update"]].join(" ");
+  return /\b(cancelled|completed|signed)\b/i.test(text) || lineStatusCode_(contract["Status Update"]) === "B";
+}
+
+function lineStatusCode_(value) {
+  const text = String(value || "").trim();
+  if (/\b(cancelled|completed|signed)\b/i.test(text) || /(^|[^A-Z])B\s*=/i.test(text)) return "B";
+  if (/\boverdue\b|\bred\b/i.test(text) || /(^|[^A-Z])R\s*=/i.test(text)) return "R";
+  if (/\bdelayed\b|\byellow\b/i.test(text) || /(^|[^A-Z])Y\s*=/i.test(text)) return "Y";
+  return "G";
+}
+
+function lineNotificationMessage_(contract, statusCode) {
+  const confidential = /confidential|สัญญาลับ/i.test([contract["Access Level"], contract.Visibility, contract.Category].join(" "));
+  const statusEnglish = statusCode === "R" ? "Overdue" : "Delayed";
+  const statusThai = statusCode === "R" ? "เกิน SLA รวม" : "ถึงช่วงติดตาม SLA รวม";
+  const contractName = confidential ? "Confidential Contract / สัญญาลับ" : String(contract["Contract Name"] || "-");
+  return [
+    "[" + statusCode + "] Contract Status Update: " + statusEnglish,
+    "สถานะสัญญา: " + statusThai,
+    "",
+    "Contract ID: " + String(contract["Contract ID"] || "-"),
+    "Contract Name: " + contractName,
+    "Contract Owner: " + String(contract["Contract Owner"] || "-"),
+    "Total SLA: " + String(contract["Total SLA"] || "0") + " Working Days",
+    "Accumulated Days: " + String(contract["Days Used"] || "0") + " Working Days",
+    "Due Date: " + String(contract["Due Date"] || "-"),
+    "",
+    statusCode === "R"
+      ? "Please update the action plan immediately. / กรุณาอัปเดตแผนดำเนินการทันที"
+      : "Please review and update the contract status. / กรุณาตรวจสอบและอัปเดตสถานะสัญญา"
+  ].join("\n");
 }
 
 function normalizeCc_(value) {
