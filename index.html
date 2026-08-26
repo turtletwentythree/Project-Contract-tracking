@@ -3453,7 +3453,7 @@
       border-style: dashed;
     }
 
-
+  
 
     /* =========================================================
        Turtle23 visual identity overrides
@@ -3778,7 +3778,7 @@
       }
     }
 
-
+  
     #addDueDate.initial-due-editable {
       background: #fffaf5;
       border-color: var(--t23-orange, #FF6600);
@@ -4008,7 +4008,7 @@
       }
     }
 
-
+  
 
     /* Avg spending time at station by department: compact numeric view */
     .avg-dept-number-grid {
@@ -4321,7 +4321,7 @@
       }
     }
 
-
+  
 
     /* Dashboard sections 5 and 6: balanced compact column sizing */
     .station-average-table .compact-no-col,
@@ -4410,7 +4410,7 @@
       font-size: 12px;
     }
 
-
+  
 
     /* Dashboard sections 5 and 6: fit all columns without internal scrolling */
     .dashboard-half-panel .chart-body {
@@ -4618,7 +4618,7 @@
       max-width: 48px;
     }
 
-
+  
 
     /* Update Status: dynamic Action / Alert reason fields */
     .dynamic-reason-panel[hidden],
@@ -5012,7 +5012,7 @@
       }
     }
 
-
+  
 
     /* Compact Update Status: Contract, Action, To, conditional Reason only */
     .update-status-compact-form {
@@ -5288,7 +5288,7 @@
       line-height: 1.4;
     }
 
-
+  
 
     /* Simple native Action select with one-line description and SLA */
     #updateCcField[hidden] {
@@ -5761,7 +5761,7 @@
       .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
     }
 
-
+  
 
     /* Visual-only alignment for Add Case, Close Case and Adjust Due Date.
        Existing fields, IDs, names, values and workflow logic remain unchanged. */
@@ -7800,21 +7800,21 @@
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="lineNotificationPanel" data-admin-only hidden>
                 <div class="panel-header">
                   <div>
-                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Local Preview</span></h2>
-                    <small>แจ้ง Contract Owner อัตโนมัติเมื่อ Status Update เป็น Y หรือ R</small>
+                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Production Group</span></h2>
+                    <small>แจ้งเตือน Status Update Y/R ไปยังกลุ่ม T23_Tracking Contract</small>
                   </div>
                   <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
                 </div>
                 <div class="line-notification-config">
                   <span class="badge amber">Trigger: Y = Delayed</span>
                   <span class="badge red">Trigger: R = Overdue</span>
-                  <span class="badge blue">Recipient: Contract Owner</span>
+                  <span class="badge blue">Recipient: T23_Tracking Contract</span>
                   <span class="badge black">Schedule: Daily 09:00 Asia/Bangkok</span>
                   <span class="badge black">Max 1 notification per Contract / Day</span>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE User ID</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
+                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE Destination</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
                     <tbody id="lineNotificationPreviewRows"></tbody>
                   </table>
                 </div>
@@ -20922,20 +20922,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         .map(contract => {
           const statusCode = statusCodeFor(contract.status);
           if (!["Y", "R"].includes(statusCode)) return null;
-          const ownerRecord = lineOwnerRecord(contract.owner);
-          const lineUserId = String(ownerRecord?.lineUserId || "").trim();
-          const enabled = isMasterActive(ownerRecord?.lineNotifications || "Yes");
           return {
             contractId: contract.id,
             contractName: contract.name,
             owner: contract.owner || "Unassigned",
-            lineUserId,
+            lineUserId: "T23_Tracking Contract",
             statusCode,
             statusLabel: statusCode === "R" ? "R = Overdue" : "Y = Delayed",
             confidential: isConfidentialContract(contract),
             message: lineNotificationMessage(contract, statusCode),
-            ready: Boolean(lineUserId && enabled),
-            delivery: !ownerRecord ? "Owner not found in People Master" : !enabled ? "LINE Alert disabled" : !lineUserId ? "Missing LINE User ID" : "Ready for automatic LINE"
+            ready: true,
+            delivery: "Ready for automatic LINE group"
           };
         })
         .filter(Boolean)
@@ -20957,7 +20954,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           <td class="line-queue-status"><span class="badge ${item.ready ? "green" : "amber"}">${escapeHtml(item.delivery)}</span></td>
         </tr>`).join("") : '<tr><td colspan="6">No Y/R Status Update notifications</td></tr>';
       const readyCount = queue.filter(item => item.ready).length;
-      summaryNode.textContent = `Local Preview only · ${queue.length} notification(s) · ${readyCount} ready · ${queue.length - readyCount} require LINE User ID or configuration`;
+      summaryNode.textContent = `Production group · ${queue.length} notification(s) · ${readyCount} ready · Max 1 notification per Contract / Day`;
     }
 
     function renderDueDateApprovalQueue() {
