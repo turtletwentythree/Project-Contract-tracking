@@ -304,13 +304,18 @@ function sendLineStatusNotification_(payload) {
 function pushLineMessage_(to, message) {
   const token = String(PropertiesService.getScriptProperties().getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY) || "").trim();
   if (!token) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured in Script Properties.");
+  const messages = Array.isArray(message) ? message : [message];
+  const normalizedMessages = messages.map(function(item) {
+    if (item && typeof item === "object") return item;
+    return { type: "text", text: String(item || "").slice(0, 5000) };
+  });
   const response = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
     method: "post",
     contentType: "application/json",
     headers: { Authorization: "Bearer " + token },
     payload: JSON.stringify({
       to: String(to || "").trim(),
-      messages: [{ type: "text", text: String(message || "").slice(0, 5000) }]
+      messages: normalizedMessages
     }),
     muteHttpExceptions: true
   });
@@ -327,8 +332,21 @@ function pushLineMessage_(to, message) {
 }
 
 function runLineStatusNotifications(options) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: true, sent: 0, skipped: 0, failed: 0, busy: true, reason: "Another LINE notification run is in progress." };
+  }
+  try {
+    return runLineStatusNotificationsUnlocked_(options);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function runLineStatusNotificationsUnlocked_(options) {
   const settings = options || {};
   const dryRun = settings.dryRun === true || String(settings.dryRun || "").toLowerCase() === "true";
+  const forceSend = settings.forceSend === true || String(settings.forceSend || "").toLowerCase() === "true";
   const folder = DriveApp.getFolderById(settings.folderId || DEFAULT_DATABASE_FOLDER_ID);
   const contracts = csvObjects_(readTextFileByName_(folder, settings.contractsCsv || "tracking_contracts_contracts_db.csv"));
   const people = csvObjects_(readTextFileByName_(folder, settings.peopleMasterCsv || "tracking_contracts_people_master_db.csv"));
@@ -337,6 +355,7 @@ function runLineStatusNotifications(options) {
   const lineGroupId = String(properties.getProperty(LINE_GROUP_ID_PROPERTY) || "").trim();
   const today = Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd");
   const results = [];
+  const candidates = [];
   let sent = 0;
   let skipped = 0;
   let failed = 0;
@@ -377,38 +396,242 @@ function runLineStatusNotifications(options) {
       return;
     }
     // A contract can generate at most one LINE notification per calendar day.
-    if (!dryRun && properties.getProperty(dedupeKey) === dedupeValue) {
+    if (!dryRun && !forceSend && properties.getProperty(dedupeKey) === dedupeValue) {
       skipped += 1;
       results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "This contract was already sent today." });
       return;
     }
 
-    const message = lineNotificationMessage_(contract, statusCode);
-    if (dryRun) {
-      results.push({ contractId: contractId, statusCode: statusCode, sent: false, dryRun: true, to: lineRecipient, recipientType: recipientType, message: message });
-      return;
-    }
-    try {
-      pushLineMessage_(lineRecipient, message);
-      properties.setProperty(dedupeKey, dedupeValue);
-      sent += 1;
-      results.push({ contractId: contractId, statusCode: statusCode, sent: true, to: lineRecipient, recipientType: recipientType });
-    } catch (error) {
-      failed += 1;
-      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: errorMessage_(error) });
-    }
+    candidates.push({
+      contract: contract,
+      contractId: contractId,
+      statusCode: statusCode,
+      ownerName: ownerName || "Unassigned",
+      to: lineRecipient,
+      recipientType: recipientType,
+      dedupeKey: dedupeKey,
+      dedupeValue: dedupeValue
+    });
   });
+
+  const batches = lineFlexNotificationBatches_(candidates);
+  if (dryRun) {
+    candidates.forEach(function(candidate) {
+      results.push({
+        contractId: candidate.contractId,
+        statusCode: candidate.statusCode,
+        sent: false,
+        dryRun: true,
+        to: candidate.to,
+        recipientType: candidate.recipientType,
+        format: "flex"
+      });
+    });
+  } else {
+    batches.forEach(function(batch) {
+      try {
+        pushLineMessage_(batch.to, batch.message);
+        batch.candidates.forEach(function(candidate) {
+          properties.setProperty(candidate.dedupeKey, candidate.dedupeValue);
+          sent += 1;
+          results.push({
+            contractId: candidate.contractId,
+            statusCode: candidate.statusCode,
+            sent: true,
+            to: candidate.to,
+            recipientType: candidate.recipientType,
+            format: "flex"
+          });
+        });
+      } catch (error) {
+        batch.candidates.forEach(function(candidate) {
+          failed += 1;
+          results.push({ contractId: candidate.contractId, statusCode: candidate.statusCode, sent: false, reason: errorMessage_(error) });
+        });
+      }
+    });
+  }
 
   return {
     success: failed === 0,
     dryRun: dryRun,
+    forceSend: forceSend,
     sent: sent,
     skipped: skipped,
     failed: failed,
     checked: results.length,
+    flexBatches: batches.length,
     runAt: new Date().toISOString(),
     results: results
   };
+}
+
+function lineFlexNotificationBatches_(candidates) {
+  const byRecipient = {};
+  (candidates || []).forEach(function(candidate) {
+    const key = candidate.to;
+    if (!byRecipient[key]) byRecipient[key] = { recipientType: candidate.recipientType, candidates: [] };
+    byRecipient[key].candidates.push(candidate);
+  });
+
+  const batches = [];
+  Object.keys(byRecipient).forEach(function(to) {
+    const recipient = byRecipient[to];
+    const grouped = {};
+    recipient.candidates.forEach(function(candidate) {
+      const groupKey = candidate.statusCode + "|" + candidate.ownerName;
+      if (!grouped[groupKey]) grouped[groupKey] = { statusCode: candidate.statusCode, ownerName: candidate.ownerName, candidates: [] };
+      grouped[groupKey].candidates.push(candidate);
+    });
+
+    const pages = [];
+    Object.keys(grouped).sort().forEach(function(groupKey) {
+      const group = grouped[groupKey];
+      group.candidates.sort(function(a, b) {
+        return Number(b.contract["Days Used"] || 0) - Number(a.contract["Days Used"] || 0) || a.contractId.localeCompare(b.contractId);
+      });
+      const pageCount = Math.ceil(group.candidates.length / 4);
+      for (let index = 0; index < group.candidates.length; index += 4) {
+        const pageCandidates = group.candidates.slice(index, index + 4);
+        pages.push({
+          bubble: lineFlexStatusBubble_(group.statusCode, group.ownerName, pageCandidates, Math.floor(index / 4) + 1, pageCount, recipient.candidates),
+          candidates: pageCandidates
+        });
+      }
+    });
+
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 10) {
+      const pageChunk = pages.slice(pageIndex, pageIndex + 10);
+      const batchCandidates = [];
+      pageChunk.forEach(function(page) { Array.prototype.push.apply(batchCandidates, page.candidates); });
+      const statusCodes = {};
+      batchCandidates.forEach(function(candidate) { statusCodes[candidate.statusCode] = true; });
+      const statusText = Object.keys(statusCodes).sort().join("/");
+      batches.push({
+        to: to,
+        recipientType: recipient.recipientType,
+        candidates: batchCandidates,
+        message: {
+          type: "flex",
+          altText: "[" + statusText + "] Contract Status Update - " + batchCandidates.length + " contract(s)",
+          contents: { type: "carousel", contents: pageChunk.map(function(page) { return page.bubble; }) }
+        }
+      });
+    }
+  });
+  return batches;
+}
+
+function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber, pageCount, allCandidates) {
+  const isOverdue = statusCode === "R";
+  const statusEnglish = isOverdue ? "Overdue Contracts" : "Delayed Contracts";
+  const statusThai = isOverdue ? "สัญญาที่เกินกำหนด" : "สัญญาที่ถึงช่วงติดตาม";
+  const accent = isOverdue ? "#C62828" : "#C88A00";
+  const soft = isOverdue ? "#FFF0F0" : "#FFF8E1";
+  const statusTotal = (allCandidates || []).filter(function(candidate) { return candidate.statusCode === statusCode; }).length;
+  const rows = [];
+  rows.push(lineFlexTableHeader_());
+  pageCandidates.forEach(function(candidate) {
+    rows.push({ type: "separator", color: "#ECEEEF" });
+    rows.push(lineFlexContractRow_(candidate, accent));
+  });
+  return {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "horizontal",
+      backgroundColor: soft,
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 1,
+          contents: [
+            { type: "text", text: "[" + statusCode + "] " + statusEnglish, color: accent, weight: "bold", size: "lg" },
+            { type: "text", text: statusThai, color: accent, size: "xs", margin: "sm" }
+          ]
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          width: "40px",
+          flex: 0,
+          backgroundColor: accent,
+          cornerRadius: "md",
+          paddingAll: "6px",
+          justifyContent: "center",
+          contents: [{ type: "text", text: String(statusTotal), color: "#FFFFFF", weight: "bold", size: "sm", align: "center" }]
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "0px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          paddingAll: "14px",
+          contents: [
+            { type: "text", text: "CONTRACT OWNER", color: "#777C80", size: "xxs", weight: "bold" },
+            { type: "text", text: lineFlexText_(ownerName, 80), color: "#202124", size: "sm", weight: "bold", margin: "sm", wrap: true }
+          ]
+        },
+        { type: "separator", color: "#DDE1E4" },
+        { type: "box", layout: "vertical", contents: rows }
+      ]
+    },
+    footer: {
+      type: "box",
+      layout: "horizontal",
+      paddingAll: "12px",
+      contents: [
+        { type: "text", text: "Accumulated Days = Working Days", size: "xxs", color: "#777C80", flex: 1 },
+        { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Status Summary", size: "xxs", color: "#777C80", align: "end" }
+      ]
+    }
+  };
+}
+
+function lineFlexTableHeader_() {
+  return {
+    type: "box",
+    layout: "horizontal",
+    backgroundColor: "#F5F6F7",
+    paddingAll: "9px",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: "CONTRACT ID", size: "xxs", color: "#777C80", weight: "bold", flex: 3 },
+      { type: "text", text: "CONTRACT NAME", size: "xxs", color: "#777C80", weight: "bold", flex: 5 },
+      { type: "text", text: "DAYS", size: "xxs", color: "#777C80", weight: "bold", align: "end", flex: 2 },
+      { type: "text", text: "DUE DATE", size: "xxs", color: "#777C80", weight: "bold", align: "end", flex: 3 }
+    ]
+  };
+}
+
+function lineFlexContractRow_(candidate, accent) {
+  const contract = candidate.contract || {};
+  const confidential = /confidential|สัญญาลับ/i.test([contract["Access Level"], contract.Visibility, contract.Category].join(" "));
+  const contractName = confidential ? "Confidential Contract / สัญญาลับ" : String(contract["Contract Name"] || "-");
+  return {
+    type: "box",
+    layout: "horizontal",
+    paddingAll: "10px",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: lineFlexText_(candidate.contractId, 28), size: "xxs", color: "#1667A8", weight: "bold", wrap: true, flex: 3 },
+      { type: "text", text: lineFlexText_(contractName, 100), size: "xxs", color: "#202124", weight: "bold", wrap: true, maxLines: 3, flex: 5 },
+      { type: "text", text: String(Number(contract["Days Used"] || 0)), size: "xxs", color: accent, weight: "bold", align: "end", flex: 2 },
+      { type: "text", text: lineFlexText_(contract["Due Date"] || "-", 20), size: "xxs", color: "#4D5357", align: "end", wrap: true, flex: 3 }
+    ]
+  };
+}
+
+function lineFlexText_(value, limit) {
+  return String(value == null ? "" : value).replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, limit || 100);
 }
 
 function previewLineStatusNotifications() {
@@ -495,8 +718,6 @@ function lineNotificationMessage_(contract, statusCode) {
     "Contract ID: " + String(contract["Contract ID"] || "-"),
     "Contract Name: " + contractName,
     "Contract Owner: " + String(contract["Contract Owner"] || "-"),
-    "Total SLA: " + String(contract["Total SLA"] || "0") + " Working Days",
-    "Accumulated Days: " + String(contract["Days Used"] || "0") + " Working Days",
     "Due Date: " + String(contract["Due Date"] || "-"),
     "",
     statusCode === "R"
