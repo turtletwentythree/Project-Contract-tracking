@@ -6601,6 +6601,7 @@
     .admin-rights-table td:first-child, .admin-rights-table th:first-child { white-space: nowrap; }
     .password-validation-message { min-height: 18px; color: #b42318; font-size: 11px; }
     .line-notification-config { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .line-notification-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .line-message-preview { min-width: 260px; max-width: 420px; white-space: pre-line; font-size: 10px; line-height: 1.45; }
     .line-recipient-id { max-width: 170px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
     .line-queue-status { white-space: nowrap; }
@@ -7803,14 +7804,19 @@
                     <h2>LINE Status Notifications <span class="badge black admin-only-badge">Production Group</span></h2>
                     <small>แจ้งเตือน Status Update Y/R ไปยังกลุ่ม T23_Tracking Contract</small>
                   </div>
-                  <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
+                  <div class="line-notification-actions">
+                    <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
+                    <button class="primary-button" type="button" id="sendLineNotificationsNow">Send Now / ส่งแจ้งเตือนทันที</button>
+                  </div>
                 </div>
                 <div class="line-notification-config">
                   <span class="badge amber">Trigger: Y = Delayed</span>
                   <span class="badge red">Trigger: R = Overdue</span>
                   <span class="badge blue">Recipient: T23_Tracking Contract</span>
-                  <span class="badge black">Schedule: Daily 09:00 Asia/Bangkok</span>
-                  <span class="badge black">Max 1 notification per Contract / Day</span>
+                  <span class="badge black">Immediate after save</span>
+                  <span class="badge black">Fallback: Daily 09:00 Asia/Bangkok</span>
+                  <span class="badge black">Automatic: Max 1 per Contract / Day</span>
+                  <span class="badge red">Admin Send Now: Resend allowed</span>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
@@ -18393,6 +18399,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseSaveTimer = 0;
     let isApplyingDriveDatabaseLoad = false;
     let isDriveDatabaseSaveInProgress = false;
+    let isImmediateLineNotificationInProgress = false;
     let driveDatabaseSaveQueued = false;
     let driveDatabaseRefreshTimer = 0;
     let lastDriveDatabaseRefreshAt = 0;
@@ -19026,6 +19033,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updateDatabaseSyncStatus(verified
           ? `${contracts.length} contracts saved and refreshed from Shared Drive`
           : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
+        if (verified) await runImmediateLineStatusNotifications();
         return verified;
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
@@ -19036,6 +19044,31 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           driveDatabaseSaveQueued = false;
           scheduleDriveDatabaseSave();
         }
+      }
+    }
+
+    async function runImmediateLineStatusNotifications(options = {}) {
+      const endpoint = driveDatabaseEndpoint();
+      if (!endpoint || isImmediateLineNotificationInProgress) return false;
+      isImmediateLineNotificationInProgress = true;
+      try {
+        await fetch(endpoint, {
+          method: "POST",
+          mode: "no-cors",
+          redirect: "follow",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            mode: "runLineStatusNotifications",
+            source: options.source || "immediateAfterDriveSave",
+            forceSend: options.forceSend === true
+          })
+        });
+        return true;
+      } catch (error) {
+        console.warn("Immediate LINE notification request failed.", error);
+        return false;
+      } finally {
+        isImmediateLineNotificationInProgress = false;
       }
     }
 
@@ -20906,8 +20939,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         `Contract ID: ${contract.id}`,
         `Contract Name: ${contractName}`,
         `Contract Owner: ${contract.owner || "-"}`,
-        `Total SLA: ${Number(contract.totalSla || 0)} Working Days`,
-        `Accumulated Days: ${Number(contract.used || 0)} Working Days`,
         `Due Date: ${contract.due ? formatDate(contract.due) : "-"}`,
         "",
         statusCode === "R"
@@ -20954,7 +20985,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           <td class="line-queue-status"><span class="badge ${item.ready ? "green" : "amber"}">${escapeHtml(item.delivery)}</span></td>
         </tr>`).join("") : '<tr><td colspan="6">No Y/R Status Update notifications</td></tr>';
       const readyCount = queue.filter(item => item.ready).length;
-      summaryNode.textContent = `Production group · ${queue.length} notification(s) · ${readyCount} ready · Max 1 notification per Contract / Day`;
+      summaryNode.textContent = `Production group · ${queue.length} notification(s) · ${readyCount} ready · Automatic max 1 per Contract / Day · Admin resend allowed`;
     }
 
     function renderDueDateApprovalQueue() {
@@ -21245,6 +21276,29 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       document.querySelector("#refreshLineNotificationPreview")?.addEventListener("click", () => {
         renderLineStatusNotificationPreview();
         showToast("LINE notification preview refreshed. / อัปเดตตัวอย่างการแจ้งเตือนแล้ว");
+      });
+      document.querySelector("#sendLineNotificationsNow")?.addEventListener("click", async event => {
+        if (!requireSystemAdministrator()) return;
+        const queue = buildLineStatusNotificationQueue();
+        if (!queue.length) {
+          showToast("No Y/R notifications to send. / ไม่มีรายการ Y/R ที่ต้องแจ้งเตือน");
+          return;
+        }
+        if (!window.confirm(`Force-send LINE notifications for ${queue.length} Y/R contract(s) now? Contracts already sent today will be sent again.\nยืนยันส่ง LINE สำหรับ ${queue.length} สัญญาตอนนี้ โดยเคสที่ส่งแล้ววันนี้จะถูกส่งซ้ำ?`)) return;
+        const button = event.currentTarget;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Sending... / กำลังส่ง...";
+        try {
+          const submitted = await runImmediateLineStatusNotifications({ forceSend: true, source: "adminSendNow" });
+          showToast(submitted
+            ? "Admin LINE notification request sent. Resend is allowed. / ส่งคำสั่งแจ้งเตือนโดย Admin แล้ว สามารถส่งซ้ำได้"
+            : "LINE notification request could not be sent. / ไม่สามารถส่งคำสั่งแจ้งเตือนได้");
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+          renderLineStatusNotificationPreview();
+        }
       });
       document.querySelector("#dueApprovalQueueRows")?.addEventListener("click", event => {
         const button = event.target.closest("[data-review-due-request]");
