@@ -3,6 +3,8 @@ const DEFAULT_DATABASE_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 const LINE_CHANNEL_ACCESS_TOKEN_PROPERTY = "LINE_CHANNEL_ACCESS_TOKEN";
+const LINE_GROUP_ID_PROPERTY = "LINE_GROUP_ID";
+const LINE_WEBHOOK_KEY_PROPERTY = "LINE_WEBHOOK_KEY";
 const LINE_NOTIFICATION_TIMEZONE = "Asia/Bangkok";
 const LINE_NOTIFICATION_HOUR = 9;
 const LINE_NOTIFICATION_HANDLER = "runLineStatusNotifications";
@@ -12,6 +14,7 @@ function doPost(e) {
   try {
     const rawPayload = (e.postData && e.postData.contents) || (e.parameter && e.parameter.payload) || "{}";
     const payload = JSON.parse(rawPayload);
+    if (Array.isArray(payload.events)) return jsonResponse(handleLineWebhook_(payload, e));
     requestId = String(payload.requestId || "").trim();
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
     if (mode === "sendStatusEmail") {
@@ -68,14 +71,39 @@ function setEmailRequestStatus_(requestId, status) {
 
 function endpointHealthCheck_() {
   const attachmentFolder = DriveApp.getFolderById(DEFAULT_FOLDER_ID);
+  const scriptProperties = PropertiesService.getScriptProperties();
   return {
     success: true,
     state: "ready",
     attachmentFolderId: attachmentFolder.getId(),
     attachmentFolderName: attachmentFolder.getName(),
     remainingMailQuota: MailApp.getRemainingDailyQuota(),
-    lineConfigured: Boolean(PropertiesService.getScriptProperties().getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY)),
+    lineConfigured: Boolean(scriptProperties.getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY)),
+    lineGroupConfigured: Boolean(scriptProperties.getProperty(LINE_GROUP_ID_PROPERTY)),
+    lineWebhookConfigured: Boolean(scriptProperties.getProperty(LINE_WEBHOOK_KEY_PROPERTY)),
     checkedAt: new Date().toISOString()
+  };
+}
+
+function handleLineWebhook_(payload, event) {
+  const properties = PropertiesService.getScriptProperties();
+  const expectedKey = String(properties.getProperty(LINE_WEBHOOK_KEY_PROPERTY) || "").trim();
+  const providedKey = String(event && event.parameter && event.parameter.key || "").trim();
+  if (!expectedKey || providedKey !== expectedKey) throw new Error("Invalid LINE webhook key.");
+
+  let groupCaptured = false;
+  (payload.events || []).forEach(function(lineEvent) {
+    const source = lineEvent && lineEvent.source || {};
+    const groupId = source.type === "group" ? String(source.groupId || "").trim() : "";
+    if (!groupId) return;
+    properties.setProperty(LINE_GROUP_ID_PROPERTY, groupId);
+    properties.setProperty("LINE_GROUP_ID_CAPTURED_AT", new Date().toISOString());
+    groupCaptured = true;
+  });
+  return {
+    success: true,
+    received: (payload.events || []).length,
+    groupCaptured: groupCaptured
   };
 }
 
@@ -306,6 +334,7 @@ function runLineStatusNotifications(options) {
   const people = csvObjects_(readTextFileByName_(folder, settings.peopleMasterCsv || "tracking_contracts_people_master_db.csv"));
   const owners = lineOwnerMap_(people);
   const properties = PropertiesService.getScriptProperties();
+  const lineGroupId = String(properties.getProperty(LINE_GROUP_ID_PROPERTY) || "").trim();
   const today = Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd");
   const results = [];
   let sent = 0;
@@ -322,6 +351,8 @@ function runLineStatusNotifications(options) {
     const owner = owners[normalizeLineLookup_(ownerName)] || null;
     const lineUserId = String(owner && (owner.lineUserId || owner["LINE User ID"]) || "").trim();
     const lineEnabled = owner && masterFlagEnabled_(owner.lineNotifications || owner["LINE Alert"] || "Yes");
+    const lineRecipient = lineGroupId || lineUserId;
+    const recipientType = lineGroupId ? "group" : "owner";
     const dedupeKey = "t23_line_status_" + contractId;
     const dedupeValue = today;
 
@@ -330,19 +361,19 @@ function runLineStatusNotifications(options) {
       results.push({ contractId: "", statusCode: statusCode, sent: false, reason: "Missing Contract ID." });
       return;
     }
-    if (!owner) {
+    if (!lineGroupId && !owner) {
       skipped += 1;
       results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Contract Owner not found in People Master." });
       return;
     }
-    if (!lineEnabled) {
+    if (!lineGroupId && !lineEnabled) {
       skipped += 1;
       results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "LINE Alert disabled for Contract Owner." });
       return;
     }
-    if (!lineUserId) {
+    if (!lineRecipient) {
       skipped += 1;
-      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Missing LINE User ID." });
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Missing LINE Group ID or LINE User ID." });
       return;
     }
     // A contract can generate at most one LINE notification per calendar day.
@@ -354,14 +385,14 @@ function runLineStatusNotifications(options) {
 
     const message = lineNotificationMessage_(contract, statusCode);
     if (dryRun) {
-      results.push({ contractId: contractId, statusCode: statusCode, sent: false, dryRun: true, to: lineUserId, message: message });
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, dryRun: true, to: lineRecipient, recipientType: recipientType, message: message });
       return;
     }
     try {
-      pushLineMessage_(lineUserId, message);
+      pushLineMessage_(lineRecipient, message);
       properties.setProperty(dedupeKey, dedupeValue);
       sent += 1;
-      results.push({ contractId: contractId, statusCode: statusCode, sent: true, to: lineUserId });
+      results.push({ contractId: contractId, statusCode: statusCode, sent: true, to: lineRecipient, recipientType: recipientType });
     } catch (error) {
       failed += 1;
       results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: errorMessage_(error) });
