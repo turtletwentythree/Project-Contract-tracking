@@ -7,7 +7,7 @@ const LINE_GROUP_ID_PROPERTY = "LINE_GROUP_ID";
 const LINE_WEBHOOK_KEY_PROPERTY = "LINE_WEBHOOK_KEY";
 const LINE_NOTIFICATION_TIMEZONE = "Asia/Bangkok";
 const LINE_NOTIFICATION_HOUR = 9;
-const LINE_NOTIFICATION_HANDLER = "runLineStatusNotifications";
+const LINE_NOTIFICATION_HANDLER = "runLineStatusNotificationsScheduled";
 
 function doPost(e) {
   let requestId = "";
@@ -638,13 +638,31 @@ function previewLineStatusNotifications() {
   return runLineStatusNotifications({ dryRun: true });
 }
 
+function runLineStatusNotificationsScheduled() {
+  const weekday = Number(Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "u"));
+  if (weekday > 5) {
+    return {
+      success: true,
+      scheduled: true,
+      skippedWeekend: true,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      runAt: new Date().toISOString()
+    };
+  }
+  return runLineStatusNotifications({ source: "weekdayFallback0900" });
+}
+
 function installLineStatusNotificationTrigger() {
   return installLineStatusNotificationTrigger_();
 }
 
 function installLineStatusNotificationTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
-    if (trigger.getHandlerFunction && trigger.getHandlerFunction() === LINE_NOTIFICATION_HANDLER) ScriptApp.deleteTrigger(trigger);
+    if (!trigger.getHandlerFunction) return;
+    const handler = trigger.getHandlerFunction();
+    if (handler === LINE_NOTIFICATION_HANDLER || handler === "runLineStatusNotifications") ScriptApp.deleteTrigger(trigger);
   });
   const trigger = ScriptApp.newTrigger(LINE_NOTIFICATION_HANDLER)
     .timeBased()
@@ -657,7 +675,8 @@ function installLineStatusNotificationTrigger_() {
     installed: true,
     handlerFunction: trigger.getHandlerFunction(),
     hour: LINE_NOTIFICATION_HOUR,
-    timezone: LINE_NOTIFICATION_TIMEZONE
+    timezone: LINE_NOTIFICATION_TIMEZONE,
+    weekdaysOnly: true
   };
 }
 
