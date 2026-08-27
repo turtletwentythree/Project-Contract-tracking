@@ -6781,7 +6781,6 @@
               <div class="panel-header">
                 <div>
                   <h2>7. By Person — Station Owner Status Summary</h2>
-                  <small>Horizontal stacked bars by Contract Owner · sorted high to low by Delayed + At Risk</small>
                 </div>
               </div>
               <div class="chart-body" id="personAlertChart"></div>
@@ -6791,7 +6790,6 @@
               <div class="panel-header">
                 <div>
                   <h2>8. By Dept — Station Owner Status Summary</h2>
-                  <small>Horizontal stacked bars by Department · sorted high to low by Delayed + At Risk</small>
                 </div>
               </div>
               <div class="chart-body" id="deptAlertChart"></div>
@@ -14230,7 +14228,6 @@
       };
 
       document.querySelector("#deptAlertChart").innerHTML = `
-        <div class="mock-data-banner">Excel Data · ข้อมูล Contract ID / SLA จาก workbook จริง</div>
         ${groupedAlertBarRows(
           mockDeptContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockDeptContractStatus, label, alertCode),
@@ -14238,7 +14235,6 @@
         )}`;
 
       document.querySelector("#personAlertChart").innerHTML = `
-        <div class="mock-data-banner">Excel Data · ข้อมูล Contract ID / SLA จาก workbook จริง</div>
         ${groupedAlertBarRows(
           mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
