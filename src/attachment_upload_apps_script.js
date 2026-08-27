@@ -431,7 +431,7 @@ function runLineStatusNotificationsUnlocked_(options) {
   } else {
     batches.forEach(function(batch) {
       try {
-        pushLineMessage_(batch.to, batch.message);
+        pushLineMessage_(batch.to, batch.messages || batch.message);
         batch.candidates.forEach(function(candidate) {
           properties.setProperty(candidate.dedupeKey, candidate.dedupeValue);
           sent += 1;
@@ -462,6 +462,7 @@ function runLineStatusNotificationsUnlocked_(options) {
     failed: failed,
     checked: results.length,
     flexBatches: batches.length,
+    flexMessages: batches.reduce(function(total, batch) { return total + ((batch.messages && batch.messages.length) || 1); }, 0),
     runAt: new Date().toISOString(),
     results: results
   };
@@ -508,19 +509,101 @@ function lineFlexNotificationBatches_(candidates) {
       const statusCodes = {};
       batchCandidates.forEach(function(candidate) { statusCodes[candidate.statusCode] = true; });
       const statusText = Object.keys(statusCodes).sort().join("/");
+      const tableMessage = {
+        type: "flex",
+        altText: "[" + statusText + "] Contract Status Update - " + batchCandidates.length + " contract(s)",
+        contents: { type: "carousel", contents: pageChunk.map(function(page) { return page.bubble; }) }
+      };
+      const messages = [tableMessage];
+      if (pageIndex + 10 >= pages.length) messages.push(lineFlexOwnerStatusSummaryMessage_(recipient.candidates));
       batches.push({
         to: to,
         recipientType: recipient.recipientType,
         candidates: batchCandidates,
-        message: {
-          type: "flex",
-          altText: "[" + statusText + "] Contract Status Update - " + batchCandidates.length + " contract(s)",
-          contents: { type: "carousel", contents: pageChunk.map(function(page) { return page.bubble; }) }
-        }
+        messages: messages
       });
     }
   });
   return batches;
+}
+
+function lineFlexOwnerStatusSummaryMessage_(candidates) {
+  const grouped = {};
+  (candidates || []).forEach(function(candidate) {
+    const ownerName = candidate.ownerName || "Unassigned";
+    if (!grouped[ownerName]) grouped[ownerName] = { ownerName: ownerName, delayed: 0, risk: 0 };
+    if (candidate.statusCode === "Y") grouped[ownerName].delayed += 1;
+    if (candidate.statusCode === "R") grouped[ownerName].risk += 1;
+  });
+  const owners = Object.keys(grouped).map(function(key) { return grouped[key]; }).sort(function(a, b) {
+    return (b.delayed + b.risk) - (a.delayed + a.risk) || b.risk - a.risk || a.ownerName.localeCompare(b.ownerName);
+  });
+  const maxTotal = Math.max.apply(null, owners.map(function(owner) { return owner.delayed + owner.risk; }).concat([1]));
+  const bubbles = [];
+  for (let index = 0; index < owners.length; index += 6) {
+    bubbles.push(lineFlexOwnerStatusSummaryBubble_(owners.slice(index, index + 6), maxTotal, Math.floor(index / 6) + 1, Math.ceil(owners.length / 6)));
+  }
+  return {
+    type: "flex",
+    altText: "Contract Owner Status Summary - Delayed and At Risk",
+    contents: { type: "carousel", contents: bubbles }
+  };
+}
+
+function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCount) {
+  const rows = [];
+  (owners || []).forEach(function(owner, index) {
+    if (index) rows.push({ type: "separator", color: "#ECEEEF", margin: "md" });
+    rows.push({
+      type: "box",
+      layout: "vertical",
+      margin: index ? "md" : "none",
+      contents: [
+        { type: "text", text: lineFlexText_(owner.ownerName, 80), size: "xs", weight: "bold", color: "#202124", wrap: true, maxLines: 2 },
+        { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", cornerRadius: "md", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
+      ]
+    });
+  });
+  return {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      backgroundColor: "#F5F6F7",
+      contents: [
+        { type: "text", text: "By Person - Status Summary", size: "lg", weight: "bold", color: "#202124" },
+        { type: "text", text: "สรุปสถานะตาม Contract Owner", size: "xs", color: "#6F7478", margin: "sm" }
+      ]
+    },
+    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: rows },
+    footer: {
+      type: "box",
+      layout: "horizontal",
+      paddingAll: "12px",
+      contents: [
+        { type: "text", text: "Y = Delayed", size: "xxs", color: "#C58A00", weight: "bold", flex: 1 },
+        { type: "text", text: "R = At Risk", size: "xxs", color: "#CE3D34", weight: "bold", flex: 1 },
+        { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Summary", size: "xxs", color: "#777C80", align: "end", flex: 1 }
+      ]
+    }
+  };
+}
+
+function lineFlexOwnerStatusBar_(owner, maxTotal) {
+  const contents = [];
+  if (owner.delayed > 0) contents.push({
+    type: "box", layout: "vertical", flex: owner.delayed, backgroundColor: "#C58A00", justifyContent: "center",
+    contents: [{ type: "text", text: String(owner.delayed), size: "xxs", color: "#FFFFFF", weight: "bold", align: "center" }]
+  });
+  if (owner.risk > 0) contents.push({
+    type: "box", layout: "vertical", flex: owner.risk, backgroundColor: "#CE3D34", justifyContent: "center",
+    contents: [{ type: "text", text: String(owner.risk), size: "xxs", color: "#FFFFFF", weight: "bold", align: "center" }]
+  });
+  const remainder = Math.max(0, maxTotal - owner.delayed - owner.risk);
+  if (remainder > 0) contents.push({ type: "box", layout: "vertical", flex: remainder, contents: [] });
+  return contents;
 }
 
 function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber, pageCount, allCandidates) {
