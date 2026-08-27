@@ -7,6 +7,7 @@ const LINE_GROUP_ID_PROPERTY = "LINE_GROUP_ID";
 const LINE_WEBHOOK_KEY_PROPERTY = "LINE_WEBHOOK_KEY";
 const LINE_NOTIFICATION_TIMEZONE = "Asia/Bangkok";
 const LINE_NOTIFICATION_HOUR = 9;
+const LINE_NOTIFICATION_MINUTE = 30;
 const LINE_NOTIFICATION_HANDLER = "runLineStatusNotificationsScheduled";
 
 function doPost(e) {
@@ -651,7 +652,7 @@ function runLineStatusNotificationsScheduled() {
       runAt: new Date().toISOString()
     };
   }
-  return runLineStatusNotifications({ source: "weekdayFallback0900" });
+  return runLineStatusNotifications({ source: "weekdayFallback0930" });
 }
 
 function installLineStatusNotificationTrigger() {
@@ -668,6 +669,7 @@ function installLineStatusNotificationTrigger_() {
     .timeBased()
     .everyDays(1)
     .atHour(LINE_NOTIFICATION_HOUR)
+    .nearMinute(LINE_NOTIFICATION_MINUTE)
     .inTimezone(LINE_NOTIFICATION_TIMEZONE)
     .create();
   return {
@@ -675,6 +677,7 @@ function installLineStatusNotificationTrigger_() {
     installed: true,
     handlerFunction: trigger.getHandlerFunction(),
     hour: LINE_NOTIFICATION_HOUR,
+    minute: LINE_NOTIFICATION_MINUTE,
     timezone: LINE_NOTIFICATION_TIMEZONE,
     weekdaysOnly: true
   };
