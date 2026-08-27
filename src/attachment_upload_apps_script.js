@@ -545,7 +545,7 @@ function lineFlexOwnerStatusSummaryMessage_(candidates) {
   }
   return {
     type: "flex",
-    altText: "Contract Owner Status Summary - Delayed and At Risk",
+    altText: "By Person - Station Owner Summary - Delayed and At Risk",
     contents: { type: "carousel", contents: bubbles }
   };
 }
@@ -573,8 +573,8 @@ function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCou
       paddingAll: "16px",
       backgroundColor: "#F5F6F7",
       contents: [
-        { type: "text", text: "By Person - Status Summary", size: "lg", weight: "bold", color: "#202124" },
-        { type: "text", text: "สรุปสถานะตาม Contract Owner", size: "xs", color: "#6F7478", margin: "sm" }
+        { type: "text", text: "By Person — Station Owner Summary", size: "lg", weight: "bold", color: "#202124", wrap: true },
+        { type: "text", text: "สรุปสถานะตาม Station Owner", size: "xs", color: "#6F7478", margin: "sm" }
       ]
     },
     body: { type: "box", layout: "vertical", paddingAll: "16px", contents: rows },
