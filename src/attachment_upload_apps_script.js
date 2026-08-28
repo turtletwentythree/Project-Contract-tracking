@@ -408,6 +408,7 @@ function runLineStatusNotificationsUnlocked_(options) {
       contractId: contractId,
       statusCode: statusCode,
       ownerName: ownerName || "Unassigned",
+      pendingDays: lineDashboardPendingDays_(contract),
       to: lineRecipient,
       recipientType: recipientType,
       dedupeKey: dedupeKey,
@@ -425,6 +426,7 @@ function runLineStatusNotificationsUnlocked_(options) {
         dryRun: true,
         to: candidate.to,
         recipientType: candidate.recipientType,
+        day: candidate.pendingDays,
         format: "flex"
       });
     });
@@ -441,6 +443,7 @@ function runLineStatusNotificationsUnlocked_(options) {
             sent: true,
             to: candidate.to,
             recipientType: candidate.recipientType,
+            day: candidate.pendingDays,
             format: "flex"
           });
         });
@@ -490,7 +493,7 @@ function lineFlexNotificationBatches_(candidates) {
     Object.keys(grouped).sort().forEach(function(groupKey) {
       const group = grouped[groupKey];
       group.candidates.sort(function(a, b) {
-        return Number(b.contract["Days Used"] || 0) - Number(a.contract["Days Used"] || 0) || a.contractId.localeCompare(b.contractId);
+        return Number(b.pendingDays || 0) - Number(a.pendingDays || 0) || a.contractId.localeCompare(b.contractId);
       });
       const pageCount = Math.ceil(group.candidates.length / 4);
       for (let index = 0; index < group.candidates.length; index += 4) {
@@ -673,7 +676,7 @@ function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber
       layout: "horizontal",
       paddingAll: "12px",
       contents: [
-        { type: "text", text: "Accumulated Days = Working Days", size: "xxs", color: "#777C80", flex: 1 },
+        { type: "text", text: "Day = Working Days from Add Case", size: "xxs", color: "#777C80", flex: 1 },
         { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Status Summary", size: "xxs", color: "#777C80", align: "end" }
       ]
     }
@@ -708,7 +711,7 @@ function lineFlexContractRow_(candidate, accent) {
     contents: [
       { type: "text", text: lineFlexText_(candidate.contractId, 28), size: "xxs", color: "#1667A8", weight: "bold", wrap: true, flex: 3 },
       { type: "text", text: lineFlexText_(contractName, 100), size: "xxs", color: "#202124", weight: "bold", wrap: true, maxLines: 3, flex: 5 },
-      { type: "text", text: String(Number(contract["Days Used"] || 0)), size: "xxs", color: accent, weight: "bold", align: "end", flex: 2 },
+      { type: "text", text: String(Number(candidate.pendingDays || 0)), size: "xxs", color: accent, weight: "bold", align: "end", flex: 2 },
       { type: "text", text: lineFlexText_(contract["Due Date"] || "-", 20), size: "xxs", color: "#4D5357", align: "end", wrap: true, flex: 3 }
     ]
   };
@@ -716,6 +719,37 @@ function lineFlexContractRow_(candidate, accent) {
 
 function lineFlexText_(value, limit) {
   return String(value == null ? "" : value).replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, limit || 100);
+}
+
+function lineDashboardPendingDays_(contract) {
+  const source = contract || {};
+  const start = lineDateOnly_(source["Add Case Date"]);
+  const end = lineDateOnly_(Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd"));
+  if (!start || !end || end.getTime() <= start.getTime()) return start ? 0 : Number(source["Days Used"] || source["Days on Hand"] || 0) || 0;
+  let workingDays = 0;
+  const cursor = new Date(start.getTime());
+  cursor.setUTCDate(cursor.getUTCDate() + 1);
+  while (cursor.getTime() <= end.getTime()) {
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) workingDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return workingDays;
+}
+
+function lineDateOnly_(value) {
+  const text = String(value || "").trim();
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) return lineUtcDate_(match[1], match[2], match[3]);
+  match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) return lineUtcDate_(match[3], match[2], match[1]);
+  return null;
+}
+
+function lineUtcDate_(year, month, day) {
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
+  return date;
 }
 
 function previewLineStatusNotifications() {
