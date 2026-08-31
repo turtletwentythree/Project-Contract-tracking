@@ -3453,7 +3453,7 @@
       border-style: dashed;
     }
 
-  
+
 
     /* =========================================================
        Turtle23 visual identity overrides
@@ -3778,7 +3778,7 @@
       }
     }
 
-  
+
     #addDueDate.initial-due-editable {
       background: #fffaf5;
       border-color: var(--t23-orange, #FF6600);
@@ -4008,7 +4008,7 @@
       }
     }
 
-  
+
 
     /* Avg spending time at station by department: compact numeric view */
     .avg-dept-number-grid {
@@ -4321,7 +4321,7 @@
       }
     }
 
-  
+
 
     /* Dashboard sections 5 and 6: balanced compact column sizing */
     .station-average-table .compact-no-col,
@@ -4410,7 +4410,7 @@
       font-size: 12px;
     }
 
-  
+
 
     /* Dashboard sections 5 and 6: fit all columns without internal scrolling */
     .dashboard-half-panel .chart-body {
@@ -4618,7 +4618,7 @@
       max-width: 48px;
     }
 
-  
+
 
     /* Update Status: dynamic Action / Alert reason fields */
     .dynamic-reason-panel[hidden],
@@ -5012,7 +5012,7 @@
       }
     }
 
-  
+
 
     /* Compact Update Status: Contract, Action, To, conditional Reason only */
     .update-status-compact-form {
@@ -5288,7 +5288,7 @@
       line-height: 1.4;
     }
 
-  
+
 
     /* Simple native Action select with one-line description and SLA */
     #updateCcField[hidden] {
@@ -5761,7 +5761,7 @@
       .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
     }
 
-  
+
 
     /* Visual-only alignment for Add Case, Close Case and Adjust Due Date.
        Existing fields, IDs, names, values and workflow logic remain unchanged. */
@@ -7799,8 +7799,8 @@
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="lineNotificationPanel" data-admin-only hidden>
                 <div class="panel-header">
                   <div>
-                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Production Group</span></h2>
-                    <small>แจ้งเตือน Status Update Y/R ไปยังกลุ่ม T23_Tracking Contract</small>
+                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Local Preview</span></h2>
+                    <small>แจ้ง Contract Owner อัตโนมัติเมื่อ Status Update เป็น Y หรือ R</small>
                   </div>
                   <div class="line-notification-actions">
                     <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
@@ -7810,7 +7810,7 @@
                 <div class="line-notification-config">
                   <span class="badge amber">Trigger: Y = Delayed</span>
                   <span class="badge red">Trigger: R = Overdue</span>
-                  <span class="badge blue">Recipient: T23_Tracking Contract</span>
+                  <span class="badge blue">Recipient: Contract Owner</span>
                   <span class="badge black">Immediate after save</span>
                   <span class="badge black">Automatic: Mon-Fri 09:30 Asia/Bangkok</span>
                   <span class="badge black">Automatic: Max 1 per Contract / Day</span>
@@ -7818,7 +7818,7 @@
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE Destination</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
+                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE User ID</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
                     <tbody id="lineNotificationPreviewRows"></tbody>
                   </table>
                 </div>
@@ -13709,15 +13709,8 @@
           contract.alert = latestLog[10];
           contract.station = latestLog[3];
           contract.owner = contract.owner || latestLog[5];
-          contract.days = Number(latestLog[9]) || 0;
-          contract.used = contractLogs.reduce((total, row) => total + Number(row[9] || 0), 0);
-          contract.balance = Number(contract.totalSla || 0) - Number(contract.used || 0);
-          contract.status = calculateContractStatus(contract.stage, contract.used, contract.totalSla);
-        } else {
-          contract.days = Number(contract.days || contract.used || 0);
-          contract.alert = calculateAlert(contract.stage, contract.days, contract.totalSla);
-          contract.status = calculateContractStatus(contract.stage, Number(contract.used || contract.days || 0), contract.totalSla);
         }
+        syncContractTimingFromLogs(contract);
         if (isClosedAction(contract.stage)) {
           contract.balance = Math.max(0, Number(contract.balance || 0));
         }
@@ -14231,14 +14224,14 @@
         ${groupedAlertBarRows(
           mockDeptContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockDeptContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "At Risk" }
+          { yellowLabel: "Delayed", redLabel: "Overdue" }
         )}`;
 
       document.querySelector("#personAlertChart").innerHTML = `
         ${groupedAlertBarRows(
           mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "At Risk" }
+          { yellowLabel: "Delayed", redLabel: "Overdue" }
         )}`;
 
     }
@@ -16462,11 +16455,32 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return latest[7] || latest[6] || "";
     }
 
+    function accumulatedContractDays(contract, referenceDate = todayInputValue()) {
+      if (!contract) return 0;
+      const startDate = addCaseStartDateForContract(contract);
+      if (!startDate) return Number(contract.used || contract.days || 0) || 0;
+      if (isClosedAction(contract.stage)) {
+        const closeDate = latestCloseDate(contract.id);
+        return closeDate ? calculateDaysOnHand(startDate, closeDate) : Number(contract.used || contract.days || 0) || 0;
+      }
+      return calculateDaysOnHand(startDate, referenceDate);
+    }
+
+    function configuredTotalSlaForContract(contract) {
+      if (!contract) return 0;
+      const classification = contract.category || (contract.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
+      const workTypeSla = fixedSlaFromMasterData(contract.workType, contract.name, classification);
+      if (Number(workTypeSla) > 0) return Number(workTypeSla);
+      const typeSla = fixedSlaFromMasterData(contract.type, contract.name, classification);
+      if (Number(typeSla) > 0) return Number(typeSla);
+      return Number(contract.totalSla || totalSlaFor(contract.type || contract.workType, contract.name, classification) || 0) || 0;
+    }
+
     function upsertDashboardData(item) {
       const closed = !isPendingContract(item);
       const closeDate = latestCloseDate(item.id);
       const addCaseDate = addCaseStartDateForContract(item);
-      const daysFromAddCase = addCaseDate ? calculateDaysOnHand(addCaseDate, todayInputValue()) : Number(item.used || 0);
+      const daysFromAddCase = accumulatedContractDays(item);
       const record = {
         id: item.id,
         name: item.name,
@@ -16656,10 +16670,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const rows = logRecords.filter(row => row[0] === contract.id);
       rows.forEach(recalculateLogTiming);
       const latest = rows.slice(-1)[0] || null;
-      const totalSla = Number(contract.totalSla || totalSlaFor(contract.workType || contract.type)) || 0;
-      const used = rows.reduce((sum, row) => sum + (Number(row[9]) || 0), 0);
       const startDate = addCaseStartDateForContract(contract);
       contract.addCaseDate = startDate;
+      const totalSla = configuredTotalSlaForContract(contract);
+      const used = accumulatedContractDays(contract);
       contract.totalSla = totalSla;
       contract.used = used;
       contract.days = latest ? Number(latest[9]) || 0 : used;
@@ -19400,7 +19414,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
             <td>${masterInput("owner", contract.owner)}</td>
             <td>${masterInput("type", contractPrimaryTypeDisplay(contract.type))}</td>
             <td>${masterInput("stage", contract.stage)}</td>
-            <td>${masterInput("status", contract.status)}</td>
+            <td><input type="hidden" data-master-field="status" value="${escapeHtml(contract.status)}">${masterReadOnly(formatContractStatusLabel(contract.status))}</td>
             <td>${masterInput("stationOwner", stationOwnerForMasterContract(contract))}</td>
             <td>${masterInput("addCaseDate", addCaseStartDateForContract(contract), { type: "date" })}</td>
             <td>${masterInput("due", contract.due, { type: "date" })}</td>
@@ -19580,7 +19594,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           type,
           vendor: String(original.vendor || "").trim(),
           stage: String(row.stage || original.stage || "Draft Created").trim(),
-          status: String(row.status || original.status || original.alert || "Green >>G=On Track").trim(),
+          status: String(original.status || "Green >>G=On Track").trim(),
           station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,
           addCaseDate,
           due: String(row.due || original.due || "").trim(),
@@ -19589,7 +19603,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           used,
           days: Number(original.days || used) || 0,
           balance: Number(original.balance || (totalSla - used)) || 0,
-          alert: String(row.status || original.alert || original.status || "Green >>G=On Track").trim(),
+          alert: String(original.alert || "Green >>G=On Track").trim(),
           accessLevel,
           visibility: String(original.visibility || (accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป")).trim(),
           category: String(original.category || contractTypeCategoryFor(type)).trim()
@@ -19701,7 +19715,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	          "Action Data Version": actionDataVersion,
 	          Active: row.Active || "Yes"
 	        }));
-		      masterData.contractTemplates = readMasterRows("#masterTemplateRows", ["selectionLabel", "sourceRow", "classification", "typeGroup", "subType", "name", "vendor", "department", "fixedSla", "accessLevel", "active"], "name")
+	      masterData.contractTemplates = readMasterRows("#masterTemplateRows", ["selectionLabel", "sourceRow", "classification", "typeGroup", "subType", "name", "vendor", "department", "fixedSla", "accessLevel", "active"], "name")
 		        .map(row => {
 		          const classification = row.classification || classificationDisplayValue(row.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
 		          const type = String(row.subType || row.typeGroup || "").trim();
@@ -19719,6 +19733,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	            active: row.active || "Yes"
 	          };
 	        });
+	      contracts.forEach(syncContractTimingFromLogs);
+	      refreshDashboardDataFromContracts();
 	      return true;
 	    }
 
@@ -20195,6 +20211,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
+      syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === contractId);
       selectedLogContractId = contractId;
@@ -20280,6 +20297,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         updatedBy: currentUser.name || "Current User",
         updatedAt
       });
+      syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.findIndex(item => item.id === id);
       selectedLogContractId = id;
@@ -20949,17 +20967,20 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         .map(contract => {
           const statusCode = statusCodeFor(contract.status);
           if (!["Y", "R"].includes(statusCode)) return null;
+          const ownerRecord = lineOwnerRecord(contract.owner);
+          const lineUserId = String(ownerRecord?.lineUserId || "").trim();
+          const enabled = isMasterActive(ownerRecord?.lineNotifications || "Yes");
           return {
             contractId: contract.id,
             contractName: contract.name,
             owner: contract.owner || "Unassigned",
-            lineUserId: "T23_Tracking Contract",
+            lineUserId,
             statusCode,
             statusLabel: statusCode === "R" ? "R = Overdue" : "Y = Delayed",
             confidential: isConfidentialContract(contract),
             message: lineNotificationMessage(contract, statusCode),
-            ready: true,
-            delivery: "Ready for automatic LINE group"
+            ready: Boolean(lineUserId && enabled),
+            delivery: !ownerRecord ? "Owner not found in People Master" : !enabled ? "LINE Alert disabled" : !lineUserId ? "Missing LINE User ID" : "Ready for automatic LINE"
           };
         })
         .filter(Boolean)
