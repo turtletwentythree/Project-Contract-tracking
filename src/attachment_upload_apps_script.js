@@ -363,7 +363,8 @@ function runLineStatusNotificationsUnlocked_(options) {
 
   contracts.forEach(function(contract) {
     if (lineContractIsClosed_(contract)) return;
-    const statusCode = lineStatusCode_(contract["Status Update"]);
+    const accumulatedDays = lineDashboardPendingDays_(contract);
+    const statusCode = lineContractStatusCode_(contract, accumulatedDays);
     if (statusCode !== "Y" && statusCode !== "R") return;
 
     const contractId = String(contract["Contract ID"] || "").trim();
@@ -408,7 +409,8 @@ function runLineStatusNotificationsUnlocked_(options) {
       contractId: contractId,
       statusCode: statusCode,
       ownerName: ownerName || "Unassigned",
-      pendingDays: lineDashboardPendingDays_(contract),
+      pendingDays: accumulatedDays,
+      totalSla: Number(contract["Total SLA"] || 0) || 0,
       to: lineRecipient,
       recipientType: recipientType,
       dedupeKey: dedupeKey,
@@ -427,6 +429,7 @@ function runLineStatusNotificationsUnlocked_(options) {
         to: candidate.to,
         recipientType: candidate.recipientType,
         day: candidate.pendingDays,
+        totalSla: candidate.totalSla,
         format: "flex"
       });
     });
@@ -444,6 +447,7 @@ function runLineStatusNotificationsUnlocked_(options) {
             to: candidate.to,
             recipientType: candidate.recipientType,
             day: candidate.pendingDays,
+            totalSla: candidate.totalSla,
             format: "flex"
           });
         });
@@ -548,7 +552,7 @@ function lineFlexOwnerStatusSummaryMessage_(candidates) {
   }
   return {
     type: "flex",
-    altText: "By Person - Station Owner Summary - Delayed and At Risk",
+    altText: "By Person - Station Owner Summary - Delayed and Overdue",
     contents: { type: "carousel", contents: bubbles }
   };
 }
@@ -587,7 +591,7 @@ function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCou
       paddingAll: "12px",
       contents: [
         { type: "text", text: "Y = Delayed", size: "xxs", color: "#C58A00", weight: "bold", flex: 1 },
-        { type: "text", text: "R = At Risk", size: "xxs", color: "#CE3D34", weight: "bold", flex: 1 },
+        { type: "text", text: "R = Overdue", size: "xxs", color: "#CE3D34", weight: "bold", flex: 1 },
         { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Summary", size: "xxs", color: "#777C80", align: "end", flex: 1 }
       ]
     }
@@ -676,7 +680,6 @@ function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber
       layout: "horizontal",
       paddingAll: "12px",
       contents: [
-        { type: "text", text: "Day = Working Days from Add Case", size: "xxs", color: "#777C80", flex: 1 },
         { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Status Summary", size: "xxs", color: "#777C80", align: "end" }
       ]
     }
@@ -843,6 +846,17 @@ function lineStatusCode_(value) {
   if (/\boverdue\b|\bred\b/i.test(text) || /(^|[^A-Z])R\s*=/i.test(text)) return "R";
   if (/\bdelayed\b|\byellow\b/i.test(text) || /(^|[^A-Z])Y\s*=/i.test(text)) return "Y";
   return "G";
+}
+
+function lineContractStatusCode_(contract, accumulatedDays) {
+  const source = contract || {};
+  if (lineContractIsClosed_(source)) return "B";
+  const totalSla = Number(source["Total SLA"] || 0) || 0;
+  if (totalSla <= 0) return lineStatusCode_(source["Status Update"]);
+  const totalDays = Math.max(0, Number(accumulatedDays || 0) || 0);
+  if (totalDays < totalSla) return "G";
+  if (totalDays < totalSla + 5) return "Y";
+  return "R";
 }
 
 function lineNotificationMessage_(contract, statusCode) {
