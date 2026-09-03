@@ -10678,6 +10678,47 @@ def main():
       if (!contract || !beginUserCaseActionSubmit(formElement)) return;""",
         1,
     )
+    html = html.replace(
+        """        <button class="nav-button active" data-view="dashboard" title="Dashboard">
+          <span>▦</span><span class="nav-label">Dashboard</span><span class="nav-count">8</span>
+        </button>""",
+        """        <button class="nav-button active" data-view="dashboard" title="Dashboard">
+          <span>▦</span><span class="nav-label">Dashboard</span>
+        </button>""",
+        1,
+    )
+    html = html.replace(
+        """        <button class="nav-button" data-view="workflow" title="Log View" hidden>
+          <span>⇄</span><span class="nav-label">Log View</span><span class="nav-count">14</span>
+        </button>
+        <button class="nav-button" data-view="user" title="User Case Action">
+          <span>✎</span><span class="nav-label">User Case Action</span><span class="nav-count">3</span>
+        </button>""",
+        """        <button class="nav-button confidential-nav" data-view="confidential" title="Confidential Contracts" data-confidential-nav>
+          <span>◆</span><span class="nav-label">Confidential</span><span class="nav-count">0</span>
+        </button>
+        <button class="nav-button" data-view="user" title="User Case Action">
+          <span>✎</span><span class="nav-label">User Case Action</span>
+        </button>
+        <button class="nav-button" data-view="master" title="Master Data">
+          <span>▤</span><span class="nav-label">Master Data</span>
+        </button>
+        <button class="nav-button admin-tools-nav" data-view="admin" title="Admin Tools" data-admin-only hidden>
+          <span>⚙</span><span class="nav-label">Admin Tools</span>
+        </button>
+        <button class="nav-button" data-view="workflow" title="Log View" hidden>
+          <span>⇄</span><span class="nav-label">Log View</span><span class="nav-count">14</span>
+        </button>""",
+        1,
+    )
+    html = html.replace(
+        """      if (masterNav) masterNav.hidden = !canManageMasterData();
+      if (confidentialNav) confidentialNav.hidden = !canViewConfidentialContracts();""",
+        """      if (masterNav) masterNav.hidden = !canManageMasterData();
+      if (adminNav) adminNav.hidden = !canManageMasterData();
+      if (confidentialNav) confidentialNav.hidden = !canViewConfidentialContracts();""",
+        1,
+    )
     OUTPUT_HTML.write_text(html, encoding="utf-8")
     write_csv(OUTPUT_CONTRACTS_CSV, contract_csv_rows, contract_headers)
     write_csv(OUTPUT_LOGS_CSV, log_csv_rows, log_headers)
