@@ -3453,7 +3453,7 @@
       border-style: dashed;
     }
 
-
+  
 
     /* =========================================================
        Turtle23 visual identity overrides
@@ -3778,7 +3778,7 @@
       }
     }
 
-
+  
     #addDueDate.initial-due-editable {
       background: #fffaf5;
       border-color: var(--t23-orange, #FF6600);
@@ -4008,7 +4008,7 @@
       }
     }
 
-
+  
 
     /* Avg spending time at station by department: compact numeric view */
     .avg-dept-number-grid {
@@ -4321,7 +4321,7 @@
       }
     }
 
-
+  
 
     /* Dashboard sections 5 and 6: balanced compact column sizing */
     .station-average-table .compact-no-col,
@@ -4410,7 +4410,7 @@
       font-size: 12px;
     }
 
-
+  
 
     /* Dashboard sections 5 and 6: fit all columns without internal scrolling */
     .dashboard-half-panel .chart-body {
@@ -4618,7 +4618,7 @@
       max-width: 48px;
     }
 
-
+  
 
     /* Update Status: dynamic Action / Alert reason fields */
     .dynamic-reason-panel[hidden],
@@ -5012,7 +5012,7 @@
       }
     }
 
-
+  
 
     /* Compact Update Status: Contract, Action, To, conditional Reason only */
     .update-status-compact-form {
@@ -5288,7 +5288,7 @@
       line-height: 1.4;
     }
 
-
+  
 
     /* Simple native Action select with one-line description and SLA */
     #updateCcField[hidden] {
@@ -5659,6 +5659,7 @@
       font-size: 8px;
     }
 
+
     .log-action-detail-button {
       border: 0;
       border-bottom: 1px solid currentColor;
@@ -5671,25 +5672,11 @@
       padding: 1px 0;
       text-align: left;
     }
-
     .log-action-detail-button:hover,
-    .log-action-detail-button:focus-visible {
-      color: var(--t23-orange);
-    }
-
-    #logActionReasonModal {
-      z-index: 40;
-    }
-
-    .log-action-reason-modal {
-      width: min(680px, 100%);
-    }
-
-    .log-action-reason-grid {
-      display: grid;
-      gap: 8px;
-    }
-
+    .log-action-detail-button:focus-visible { color: var(--t23-orange); }
+    #logActionReasonModal { z-index: 40; }
+    .log-action-reason-modal { width: min(680px, 100%); }
+    .log-action-reason-grid { display: grid; gap: 8px; }
     .log-action-reason-row {
       display: grid;
       grid-template-columns: minmax(140px, 34%) minmax(0, 1fr);
@@ -5697,27 +5684,19 @@
       padding: 10px 0;
       border-bottom: 1px solid var(--line);
     }
-
-    .log-action-reason-row:last-child {
-      border-bottom: 0;
-    }
-
+    .log-action-reason-row:last-child { border-bottom: 0; }
     .log-action-reason-label,
-    .log-action-reason-value {
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
-
+    .log-action-reason-value { min-width: 0; overflow-wrap: anywhere; }
     .log-action-reason-label span,
-    .log-action-reason-value span {
-      display: block;
-    }
-
+    .log-action-reason-value span { display: block; }
     .log-action-reason-label span:last-child,
     .log-action-reason-value span:last-child {
       color: var(--muted);
       font-size: 10px;
       margin-top: 2px;
+    }
+    @media (max-width: 720px) {
+      .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
     }
 
     .log-meta-empty {
@@ -5758,10 +5737,9 @@
       .attachment-row { grid-template-columns: minmax(0, 1fr) auto; }
       .attachment-file-status { grid-column: 1; }
       .attachment-remove { grid-column: 2; grid-row: 1 / span 2; }
-      .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
     }
 
-
+  
 
     /* Visual-only alignment for Add Case, Close Case and Adjust Due Date.
        Existing fields, IDs, names, values and workflow logic remain unchanged. */
@@ -6672,7 +6650,7 @@
 
       <nav class="nav" aria-label="Main navigation">
         <button class="nav-button active" data-view="dashboard" title="Dashboard">
-          <span>▦</span><span class="nav-label">Dashboard</span>
+          <span>▦</span><span class="nav-label">Dashboard</span><span class="nav-count">8</span>
         </button>
         <button class="nav-button" data-view="contracts" title="Contracts">
           <span>≡</span><span class="nav-label">Contracts</span><span class="nav-count">14</span>
@@ -6680,17 +6658,8 @@
         <button class="nav-button" data-view="workflow" title="Log View" hidden>
           <span>⇄</span><span class="nav-label">Log View</span><span class="nav-count">14</span>
         </button>
-        <button class="nav-button confidential-nav" data-view="confidential" title="Confidential Contracts" data-confidential-nav>
-          <span>◆</span><span class="nav-label">Confidential</span><span class="nav-count">0</span>
-        </button>
         <button class="nav-button" data-view="user" title="User Case Action">
-          <span>✎</span><span class="nav-label">User Case Action</span>
-        </button>
-        <button class="nav-button" data-view="master" title="Master Data">
-          <span>▤</span><span class="nav-label">Master Data</span>
-        </button>
-        <button class="nav-button admin-tools-nav" data-view="admin" title="Admin Tools" data-admin-only hidden>
-          <span>⚙</span><span class="nav-label">Admin Tools</span>
+          <span>✎</span><span class="nav-label">User Case Action</span><span class="nav-count">3</span>
         </button>
         <button class="nav-button" data-view="notifications" title="Notifications" hidden>
           <span>✉</span><span class="nav-label">Notifications</span><span class="nav-count">14</span>
@@ -7329,41 +7298,6 @@
                     </select>
                     <small class="form-hint">Status: Signed / Completed = case finished · Cancelled = case closed without completion</small>
                   </label>
-                  <label class="form-field">
-                    <span class="bilingual-label"><span>To<span class="field-required-mark" aria-hidden="true">*</span></span><span>ส่งถึง<span class="field-required-mark" aria-hidden="true">*</span></span></span>
-                    <input class="input" name="to" id="closeTo" list="peopleOptions" required autocomplete="off" placeholder="Select or type the recipient&#10;เลือกหรือพิมพ์ชื่อผู้รับ" aria-label="To / ส่งถึง">
-                  </label>
-                  <input type="hidden" name="toEmail" id="closeToEmail">
-
-                  <div class="form-field full update-attachment-section" id="closeAttachmentSection" tabindex="-1">
-                    <div class="attachment-heading">
-                      <span class="bilingual-stack update-bilingual-label">
-                        <span class="en">Attachments</span>
-                        <span class="th">ไฟล์แนบ</span>
-                      </span>
-                      <span class="attachment-count bilingual-stack" id="closeAttachmentCount">
-                        <span class="en">0 files</span>
-                        <span class="th">0 ไฟล์</span>
-                      </span>
-                    </div>
-                    <div class="attachment-dropzone" id="closeAttachmentDropzone">
-                      <input id="closeAttachmentInput" type="file" multiple hidden
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
-                      <button class="ghost-button compact-attach-button" type="button" id="closeAttachFilesBtn">
-                        <span class="button-bilingual"><strong>Attach Files</strong><small>แนบไฟล์</small></span>
-                      </button>
-                      <span class="attachment-drop-copy bilingual-stack">
-                        <span class="en">Drop multiple files here</span>
-                        <span class="th">ลากและวางไฟล์หลายไฟล์ที่นี่</span>
-                      </span>
-                    </div>
-                    <div class="attachment-list" id="closeAttachmentList" hidden></div>
-                    <div class="compact-help bilingual-stack">
-                      <span class="en">Optional · Up to 10 files · 20 MB per file</span>
-                      <span class="th">ไม่บังคับ · สูงสุด 10 ไฟล์ · ไฟล์ละไม่เกิน 20 MB</span>
-                    </div>
-                    <div class="field-validation-error bilingual-error" id="closeAttachmentError"></div>
-                  </div>
                   <input type="hidden" name="owner" id="closeOwner">
                   <input type="hidden" name="closeDate" id="closeDate">
                   <div class="runtime-field close-system-summary">
@@ -7389,7 +7323,7 @@
                   <option value="Marketing">Marketing</option>
                   <option value="Operation">Operation</option>
                   <option value="Procurement">Procurement</option>
-                  <option value="Project Management">Project Management</option>
+                  <option value="Project Manager">Project Manager</option>
                 </datalist>
                 <datalist id="ownerOptions">
                   <option value="Pavarit Im-em (Dome)" label="Business Development · pavarit.i@turtle23.com">Pavarit Im-em (Dome) — Business Development — pavarit.i@turtle23.com</option>
@@ -7416,9 +7350,9 @@
                   <option value="Jadsadaraj Charoeanwerapong (Tong)" label="Procurement · jadsadaraj.c@turtle23.com">Jadsadaraj Charoeanwerapong (Tong) — Procurement — jadsadaraj.c@turtle23.com</option>
                   <option value="Patcharaporn Sayayon (Nan Chopper)" label="Procurement · patcharaporn.s@turtle23.com">Patcharaporn Sayayon (Nan Chopper) — Procurement — patcharaporn.s@turtle23.com</option>
                   <option value="Uraiwan Julratphan (Wan)" label="Procurement · uraiwan.j@turtle23.com">Uraiwan Julratphan (Wan) — Procurement — uraiwan.j@turtle23.com</option>
-                  <option value="Rawisara Teerapakornkul (Star)" label="Project Management · rawisara.t@turtle23.com">Rawisara Teerapakornkul (Star) — Project Management — rawisara.t@turtle23.com</option>
-                  <option value="Tanapat Noisiri (Nutt)" label="Project Management · tanapat.n@turtle23.com">Tanapat Noisiri (Nutt) — Project Management — tanapat.n@turtle23.com</option>
-                  <option value="Wassana Laam (Ying)" label="Project Management · wassana.l@turtle23.com">Wassana Laam (Ying) — Project Management — wassana.l@turtle23.com</option>
+                  <option value="Rawisara Teerapakornkul (Star)" label="Project Manager · rawisara.t@turtle23.com">Rawisara Teerapakornkul (Star) — Project Manager — rawisara.t@turtle23.com</option>
+                  <option value="Tanapat Noisiri (Nutt)" label="Project Manager · tanapat.n@turtle23.com">Tanapat Noisiri (Nutt) — Project Manager — tanapat.n@turtle23.com</option>
+                  <option value="Wassana Laam (Ying)" label="Project Manager · wassana.l@turtle23.com">Wassana Laam (Ying) — Project Manager — wassana.l@turtle23.com</option>
                 </datalist>
                 <datalist id="peopleOptions">
                   <option value="Pavarit Im-em (Dome)" label="Business Development · pavarit.i@turtle23.com">Pavarit Im-em (Dome) — Business Development — pavarit.i@turtle23.com</option>
@@ -7445,9 +7379,9 @@
                   <option value="Jadsadaraj Charoeanwerapong (Tong)" label="Procurement · jadsadaraj.c@turtle23.com">Jadsadaraj Charoeanwerapong (Tong) — Procurement — jadsadaraj.c@turtle23.com</option>
                   <option value="Patcharaporn Sayayon (Nan Chopper)" label="Procurement · patcharaporn.s@turtle23.com">Patcharaporn Sayayon (Nan Chopper) — Procurement — patcharaporn.s@turtle23.com</option>
                   <option value="Uraiwan Julratphan (Wan)" label="Procurement · uraiwan.j@turtle23.com">Uraiwan Julratphan (Wan) — Procurement — uraiwan.j@turtle23.com</option>
-                  <option value="Rawisara Teerapakornkul (Star)" label="Project Management · rawisara.t@turtle23.com">Rawisara Teerapakornkul (Star) — Project Management — rawisara.t@turtle23.com</option>
-                  <option value="Tanapat Noisiri (Nutt)" label="Project Management · tanapat.n@turtle23.com">Tanapat Noisiri (Nutt) — Project Management — tanapat.n@turtle23.com</option>
-                  <option value="Wassana Laam (Ying)" label="Project Management · wassana.l@turtle23.com">Wassana Laam (Ying) — Project Management — wassana.l@turtle23.com</option>
+                  <option value="Rawisara Teerapakornkul (Star)" label="Project Manager · rawisara.t@turtle23.com">Rawisara Teerapakornkul (Star) — Project Manager — rawisara.t@turtle23.com</option>
+                  <option value="Tanapat Noisiri (Nutt)" label="Project Manager · tanapat.n@turtle23.com">Tanapat Noisiri (Nutt) — Project Manager — tanapat.n@turtle23.com</option>
+                  <option value="Wassana Laam (Ying)" label="Project Manager · wassana.l@turtle23.com">Wassana Laam (Ying) — Project Manager — wassana.l@turtle23.com</option>
                 </datalist>
               </section>
 
@@ -7799,8 +7733,8 @@
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="lineNotificationPanel" data-admin-only hidden>
                 <div class="panel-header">
                   <div>
-                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Local Preview</span></h2>
-                    <small>แจ้ง Contract Owner อัตโนมัติเมื่อ Status Update เป็น Y หรือ R</small>
+                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Production Group</span></h2>
+                    <small>แจ้งเตือน Status Update Y/R ไปยังกลุ่ม T23_Tracking Contract</small>
                   </div>
                   <div class="line-notification-actions">
                     <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
@@ -7808,21 +7742,21 @@
                   </div>
                 </div>
                 <div class="line-notification-config">
-                  <span class="badge amber">Trigger: Y = Delayed</span>
-                  <span class="badge red">Trigger: R = Overdue</span>
-                  <span class="badge blue">Recipient: Contract Owner</span>
-                  <span class="badge black">Immediate after save</span>
+                  <span class="badge amber">Trigger Y=Delayed</span>
+                  <span class="badge red">Trigger R=Overdue</span>
+                  <span class="badge black">Recipient T23_Tracking Contract</span>
+                  <span class="badge green">Immediate after save</span>
                   <span class="badge black">Automatic: Mon-Fri 09:30 Asia/Bangkok</span>
                   <span class="badge black">Automatic: Max 1 per Contract / Day</span>
                   <span class="badge red">Admin Send Now: Resend allowed</span>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE User ID</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
+                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE Destination</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
                     <tbody id="lineNotificationPreviewRows"></tbody>
                   </table>
                 </div>
-                <div class="password-validation-message" id="lineNotificationPreviewSummary" aria-live="polite"></div>
+                <small id="lineNotificationPreviewSummary">Production group delivery preview</small>
               </section>
 
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="passwordManagementPanel" data-admin-only hidden>
@@ -8119,6 +8053,7 @@
       <div class="modal-body" id="stationOwnerBody"></div>
     </section>
   </div>
+
 
   <div class="modal-backdrop" id="logActionReasonModal" aria-hidden="true">
     <section class="modal log-action-reason-modal" role="dialog" aria-modal="true" aria-labelledby="logActionReasonTitle">
@@ -8458,25 +8393,754 @@
       },
       {
             "company": "Turtle 23",
-            "department": "Project Management",
+            "department": "Project Manager",
             "name": "Rawisara Teerapakornkul (Star)",
             "email": "rawisara.t@turtle23.com"
       },
       {
             "company": "Turtle 23",
-            "department": "Project Management",
+            "department": "Project Manager",
             "name": "Tanapat Noisiri (Nutt)",
             "email": "tanapat.n@turtle23.com"
       },
       {
             "company": "Turtle 23",
-            "department": "Project Management",
+            "department": "Project Manager",
             "name": "Wassana Laam (Ying)",
             "email": "wassana.l@turtle23.com"
       }
 ];
 
-    const contracts = [];
+    const contracts = [
+      {
+            "id": "CT-N-OP-001",
+            "name": "Sub Lease Agreement - 3 fl Capri",
+            "department": "Operation",
+            "owner": "Ratchaneekul Yamkate (Koy)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "Otto - MPZ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "addCaseDate": "",
+            "due": "2026-05-19",
+            "systemDue": "2026-05-19",
+            "workType": "Sub Lease Agreement",
+            "totalSla": 20,
+            "used": 80,
+            "days": 80,
+            "balance": -60,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: 3 fl Capri | Source Status: In Process | Legal Status: Finalized by Legal | Latest Action: K. Henry will support to talk with K. Otto. | Note: sign quotation instead of agreement",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-002",
+            "name": "Lease Asset / Amendment - BLY-T10",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม",
+            "vendor": "BLY-T10",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-03-05",
+            "systemDue": "2026-03-05",
+            "workType": "Lease Asset / Amendment",
+            "totalSla": 20,
+            "used": 133,
+            "days": 133,
+            "balance": -113,
+            "alert": "Red >>R=At Risk",
+            "remark": "Source Status: In Process | Legal Status: Finalized by Legal | Legal Tracking: L20-69 | Received: 05 Feb 2026 | Latest Action: Final signing process by OP/will send to K. Todd for signing first. Chef Ton sign back by 12 June 2026 | Note: old period, Not yet received the signed copy. sent to chef Ton 19 Feb",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-003",
+            "name": "Sub Lease Agreement - BLY-FSQ",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "BLY-FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2028-10-31",
+            "systemDue": "2026-04-27",
+            "workType": "Sub Lease Agreement",
+            "totalSla": 20,
+            "used": 96,
+            "days": 96,
+            "balance": -76,
+            "alert": "Red >>R=At Risk",
+            "remark": "Source Status: In Process | Legal Status: Awaiting information in SA | Legal Tracking: L64-69 | Received: 30 Mar 2026 | Target: 13 Apr 2026 | Legal Done: 12 Mar 2026 | Latest Action: Chef Ton's review | Note: new period, 1 Nov 25 - 31 Oct 28",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-004",
+            "name": "Sub Lease Agreement - winwin-FSQ",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "winwin-FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2028-10-31",
+            "systemDue": "2026-04-10",
+            "workType": "Sub Lease Agreement",
+            "totalSla": 20,
+            "used": 107,
+            "days": 107,
+            "balance": -87,
+            "alert": "Red >>R=At Risk",
+            "remark": "Source Status: In Process | Legal Status: Awaiting information in SA | Legal Tracking: L48-69 | Received: 13 Mar 2026 | Target: 27 Mar 2026 | Legal Done: 20 Mar 2026 | Latest Action: Sent to Tenant for reviewing./ As checked with K. Gee, he sent to Legal BTS for reviewing. | Note: new period, 1 Nov 25 - 31 Oct 28",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-005",
+            "name": "Lease Asset / Amendment - BK Salon",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม",
+            "vendor": "BLY-T3",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-05-14",
+            "systemDue": "2026-05-14",
+            "workType": "Lease Asset / Amendment",
+            "totalSla": 20,
+            "used": 83,
+            "days": 83,
+            "balance": -63,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: BK Salon | Source Status: In Process | Legal Status: Awaiting asset information | Legal Tracking: L58-69 | Received: 16 Apr 2026 | Target: 30 Apr 2026 | Latest Action: Final by legal, OP confirm the terms and conditions, Sent to Tenant on 19 June 2026 | Note: the name should b T3, due to the exceution date is on 1 Apr 25 (Back date)",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-006",
+            "name": "Lease Asset / Amendment - Gowin",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม",
+            "vendor": "BLY - FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-03-05",
+            "systemDue": "2026-03-05",
+            "workType": "Lease Asset / Amendment",
+            "totalSla": 20,
+            "used": 133,
+            "days": 133,
+            "balance": -113,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Gowin | Source Status: In Process | Legal Status: Finalized by Legal | Legal Tracking: L22-69 | Received: 05 Feb 2026 | Target: 19 Feb 2026 | Legal Done: 06 Mar 2026 | Latest Action: USER - To send agreement to counterparty",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-007",
+            "name": "Lease Agreement - Gowin",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "CM Gold (Jimmy) - FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-04-17",
+            "systemDue": "2026-04-17",
+            "workType": "Lease Agreement",
+            "totalSla": 20,
+            "used": 102,
+            "days": 102,
+            "balance": -82,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Gowin | Source Status: In Process | Legal Status: Finalized by Legal | Legal Tracking: L63-69 | Received: 20 Mar 2026 | Target: 03 Apr 2026 | Legal Done: 31 Mar 2026 | Latest Action: USER - To send agreement to counterparty/ Got review from Tenant, will send to Legal on 20May26/ Agreement will be sent by 15 June 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-008",
+            "name": "Service - Lawoi'",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "TTH-Grab",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-03-12",
+            "systemDue": "2026-03-12",
+            "workType": "Service",
+            "totalSla": 22,
+            "used": 130,
+            "days": 130,
+            "balance": -108,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Lawoi' | Source Status: In Process | Legal Status: Awaiting further information | Received: 10 Feb 2026 | Target: 24 Feb 2026 | Legal Done: 10 Feb 2026 | Latest Action: On process of singing, will sent to LAWOI by 24 June 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-IT-001",
+            "name": "Reservation System - Kappo S38",
+            "department": "IT",
+            "owner": "Kawinphop Champee (Boss)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "Weeloy - T5",
+            "stage": "Return",
+            "cycle": 1,
+            "returns": 1,
+            "status": "Red >>R=Overdue",
+            "station": "From Kawinphop Champee (Boss) >> To Kawinphop Champee (Boss)",
+            "addCaseDate": "",
+            "due": "2026-03-25",
+            "systemDue": "2026-03-25",
+            "workType": "Reservation Service Agreement",
+            "totalSla": 22,
+            "used": 244,
+            "days": 123,
+            "balance": -222,
+            "alert": "Red >>R=At Risk",
+            "remark": "- เนื่องจาก memo ที่นำส่งมีการลงนามไม่ครบสมบูรณ์ ดังนั้น ขอให้จัดส่งให้ครบถ้วน\n- วันที่ของสัญญาจะขอให้เว้นว่างไว้ \n- ขอให้พิจารณาวันตามข้อ 6.1 ว่ายังเป็นวันเริ่มต้น 11 April 26 อยู่หรือไม่ เนื่องจากเลยระยะเวลาดังกล่าวมาแล้ว\n- เนื่องจากมีการนำข้อมูลส่วนบุคคลมาใช้ในหลายส่วน ขอให้ทำแบบ flow การใช้ข้อมูลตามที่กำหนดในสัญญา และแบบฟอร์มการส่งตรวจ pdpa",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-BD-001",
+            "name": "Interior Design Agreement - Roaster Coffee",
+            "department": "Business Development",
+            "owner": "Supakorn Teerawutthiporn (PJ)",
+            "type": "Outsourcing Agreement / สัญญาจ้าง",
+            "vendor": "T5 - PAC",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Supakorn Teerawutthiporn (PJ) >> To Supakorn Teerawutthiporn (PJ)",
+            "addCaseDate": "",
+            "due": "2026-04-22",
+            "systemDue": "2026-04-22",
+            "workType": "Interior Design Agreement",
+            "totalSla": 24,
+            "used": 103,
+            "days": 103,
+            "balance": -79,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Roaster Coffee | Source Status: In Process | Received: 19 Mar 2026 | Target: 02 Apr 2026 | Latest Action: Final signing process by BD",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-BD-002",
+            "name": "No.1749 - Roaster Coffee",
+            "department": "Business Development",
+            "owner": "Supakorn Teerawutthiporn (PJ)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "T5-WBKK",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Supakorn Teerawutthiporn (PJ) >> To Supakorn Teerawutthiporn (PJ)",
+            "addCaseDate": "",
+            "due": "2026-05-28",
+            "systemDue": "2026-05-28",
+            "workType": "Lease Agreement",
+            "totalSla": 20,
+            "used": 73,
+            "days": 73,
+            "balance": -53,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Roaster Coffee | Source Status: In Process | Legal Status: Awaiting further information | Received: 30 Apr 2026 | Latest Action: Final signing process by BD",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-MKT-001",
+            "name": "Consultancy Agreement - Unicorn Bldg",
+            "department": "Marketing",
+            "owner": "Nithita Aroonchote (Ploy)",
+            "type": "Outsourcing Agreement / สัญญาจ้าง",
+            "vendor": "T23-Kamkoong",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Nithita Aroonchote (Ploy) >> To Nithita Aroonchote (Ploy)",
+            "addCaseDate": "",
+            "due": "2026-05-13",
+            "systemDue": "2026-05-13",
+            "workType": "Consultancy Agreement",
+            "totalSla": 24,
+            "used": 88,
+            "days": 88,
+            "balance": -64,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Unicorn Bldg | Source Status: In Process | Legal Status: Final signing process by MKT | Legal Tracking: L70-69 | Received: 09 Apr 2026 | Target: 23 Apr 2026 | Legal Done: 27 Apr 2026 | Latest Action: Final signing process by MKT",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-009",
+            "name": "Laundry Service - Baan Turtle BKK",
+            "department": "Operation",
+            "owner": "Ratchaneekul Yamkate (Koy)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "PVE-FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "addCaseDate": "",
+            "due": "2026-05-08",
+            "systemDue": "2026-05-08",
+            "workType": "Laundry Service",
+            "totalSla": 22,
+            "used": 89,
+            "days": 89,
+            "balance": -67,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle BKK | Source Status: In Process | Legal Status: Finalized by Legal | Received: 08 Apr 2026 | Target: 22 Apr 2026 | Note: K. Koy",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-ADMIN-001",
+            "name": "House Keeper - T23 office",
+            "department": "Administration",
+            "owner": "Nattanai Saranpumidech (Ohm)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "T23-SCS",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Nattanai Saranpumidech (Ohm) >> To Nattanai Saranpumidech (Ohm)",
+            "addCaseDate": "",
+            "due": "2026-05-18",
+            "systemDue": "2026-05-18",
+            "workType": "Service Agreement",
+            "totalSla": 22,
+            "used": 83,
+            "days": 83,
+            "balance": -61,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: T23 office | Source Status: In Process | Legal Status: Finalized by Legal | Legal Tracking: L76-69 | Received: 16 Apr 2026 | Target: 30 Apr 2026 | Legal Done: 21 Apr 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-010",
+            "name": "Secirity Guard - BK Salon",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "FSQ - LSS",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-05-26",
+            "systemDue": "2026-05-26",
+            "workType": "Service Agreement",
+            "totalSla": 22,
+            "used": 77,
+            "days": 77,
+            "balance": -55,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: BK Salon | Source Status: In Process | Received: 24 Apr 2026 | Latest Action: sent agreement to supplier for issuing and signing contract by 9 June 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-MKT-002",
+            "name": "MKT services - BTSV",
+            "department": "Marketing",
+            "owner": "Pattarat Piamsin (Mind)",
+            "type": "Outsourcing Agreement / สัญญาจ้าง",
+            "vendor": "T23 - MCL",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Pattarat Piamsin (Mind) >> To Pattarat Piamsin (Mind)",
+            "addCaseDate": "",
+            "due": "2026-06-24",
+            "systemDue": "2026-06-24",
+            "workType": "Consultancy Agreement",
+            "totalSla": 24,
+            "used": 58,
+            "days": 58,
+            "balance": -34,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: BTSV | Source Status: In Process | Received: 21 May 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-011",
+            "name": "Lift service - Baan Turtle",
+            "department": "Operation",
+            "owner": "Ratchaneekul Yamkate (Koy)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "FSQ - Cibes",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "addCaseDate": "",
+            "due": "2026-06-24",
+            "systemDue": "2026-06-24",
+            "workType": "Service Agreement with equipment",
+            "totalSla": 22,
+            "used": 56,
+            "days": 56,
+            "balance": -34,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle | Source Status: In Process | Received: 25 May 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-012",
+            "name": "Lift service - Baan Turtle",
+            "department": "Operation",
+            "owner": "Ratchaneekul Yamkate (Koy)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "FSQ - Cibes",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "addCaseDate": "",
+            "due": "2026-06-24",
+            "systemDue": "2026-06-24",
+            "workType": "Service Agreement without equipment",
+            "totalSla": 22,
+            "used": 56,
+            "days": 56,
+            "balance": -34,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle | Source Status: In Process | Received: 25 May 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-013",
+            "name": "Equipments - Lawoi'",
+            "department": "Operation",
+            "owner": "Ratchaneekul Yamkate (Koy)",
+            "type": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
+            "vendor": "KTT - Saha",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "addCaseDate": "",
+            "due": "2026-06-22",
+            "systemDue": "2026-06-22",
+            "workType": "Eqipment lease agreement",
+            "totalSla": 20,
+            "used": 56,
+            "days": 56,
+            "balance": -36,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Lawoi' | Source Status: In Process | Received: 25 May 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-MKT-003",
+            "name": "cross charge",
+            "department": "Marketing",
+            "owner": "Pijitporn Atjima-anan (Mod)",
+            "type": "Outsourcing Agreement / สัญญาจ้าง",
+            "vendor": "T23 - Alpea",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Pijitporn Atjima-anan (Mod) >> To Pijitporn Atjima-anan (Mod)",
+            "addCaseDate": "",
+            "due": "2026-07-09",
+            "systemDue": "2026-07-09",
+            "workType": "Consultancy Agreement",
+            "totalSla": 24,
+            "used": 47,
+            "days": 47,
+            "balance": -23,
+            "alert": "Red >>R=At Risk",
+            "remark": "Source Status: In Process | Legal Tracking: L100-69 | Received: 05 Jun 2026 | Latest Action: Final signing process by MKT",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-014",
+            "name": "Lease Agreement/ Amendment - Baan Turtle",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม",
+            "vendor": "T23 - T10",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-07-02",
+            "systemDue": "2026-07-02",
+            "workType": "Lease Agreement/ Amendment",
+            "totalSla": 20,
+            "used": 48,
+            "days": 48,
+            "balance": -28,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle | Source Status: In Process | Received: 04 Jun 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-015",
+            "name": "PCS - Baan Turtle Phuket",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Service Agreement / สัญญาให้บริการ",
+            "vendor": "T23",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-07-23",
+            "systemDue": "2026-07-23",
+            "workType": "Security service agreement",
+            "totalSla": 22,
+            "used": 35,
+            "days": 35,
+            "balance": -13,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle Phuket | Source Status: In Process | Received: 23 Jun 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-N-OP-016",
+            "name": "Sakeseeker - Capricci",
+            "department": "Operation",
+            "owner": "Preeyapas Srinon (Nan)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "Mammapazza",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "addCaseDate": "",
+            "due": "2026-07-27",
+            "systemDue": "2026-07-27",
+            "workType": "SAKE Playground event",
+            "totalSla": 24,
+            "used": 35,
+            "days": 35,
+            "balance": -11,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Capricci | Source Status: In Process | Received: 23 Jun 2026",
+            "accessLevel": "Normal",
+            "visibility": "Standard access / สิทธิ์ทั่วไป",
+            "category": "Day-to-day Work"
+      },
+      {
+            "id": "CT-C-FIN-001",
+            "name": "Management Agreement - Sathorn 10 Project",
+            "department": "Finance",
+            "owner": "Atsanai Banmai (Bank)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "T23 - FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "addCaseDate": "",
+            "due": "2026-06-18",
+            "systemDue": "2026-06-18",
+            "workType": "Management Agreement",
+            "totalSla": 24,
+            "used": 62,
+            "days": 62,
+            "balance": -38,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Sathorn 10 Project | Source Status: In Process | Legal Tracking: L99-69 | Received: 15 May 2026",
+            "accessLevel": "Confidential",
+            "visibility": "Restricted access / จำกัดสิทธิ์",
+            "category": "Confidential"
+      },
+      {
+            "id": "CT-C-FIN-002",
+            "name": "Management Agreement - Baan Turtle",
+            "department": "Finance",
+            "owner": "Atsanai Banmai (Bank)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "T23 - FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "addCaseDate": "",
+            "due": "2026-06-18",
+            "systemDue": "2026-06-18",
+            "workType": "Management Agreement",
+            "totalSla": 24,
+            "used": 62,
+            "days": 62,
+            "balance": -38,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Baan Turtle | Source Status: In Process | Legal Tracking: L106-69 | Received: 15 May 2026",
+            "accessLevel": "Confidential",
+            "visibility": "Restricted access / จำกัดสิทธิ์",
+            "category": "Confidential"
+      },
+      {
+            "id": "CT-C-FIN-003",
+            "name": "Management Agreement - Sathu Pradit",
+            "department": "Finance",
+            "owner": "Atsanai Banmai (Bank)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "T23 - FSQ",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "addCaseDate": "",
+            "due": "2026-06-18",
+            "systemDue": "2026-06-18",
+            "workType": "Management Agreement",
+            "totalSla": 24,
+            "used": 62,
+            "days": 62,
+            "balance": -38,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Sathu Pradit | Source Status: In Process | Legal Tracking: L107-69 | Received: 15 May 2026",
+            "accessLevel": "Confidential",
+            "visibility": "Restricted access / จำกัดสิทธิ์",
+            "category": "Confidential"
+      },
+      {
+            "id": "CT-C-FIN-004",
+            "name": "Management Agreement - Chan Kao",
+            "department": "Finance",
+            "owner": "Atsanai Banmai (Bank)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "T23 - WBKK",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "addCaseDate": "",
+            "due": "2026-06-18",
+            "systemDue": "2026-06-18",
+            "workType": "Management Agreement",
+            "totalSla": 24,
+            "used": 62,
+            "days": 62,
+            "balance": -38,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Chan Kao | Source Status: In Process | Legal Tracking: L108-69 | Received: 15 May 2026",
+            "accessLevel": "Confidential",
+            "visibility": "Restricted access / จำกัดสิทธิ์",
+            "category": "Confidential"
+      },
+      {
+            "id": "CT-C-FIN-005",
+            "name": "Management Agreement - Yenakart",
+            "department": "Finance",
+            "owner": "Atsanai Banmai (Bank)",
+            "type": "Commercial Agreement / สัญญาทางธุรกิจ",
+            "vendor": "T23 - WBKK",
+            "stage": "Draft Created",
+            "cycle": 1,
+            "returns": 0,
+            "status": "Red >>R=Overdue",
+            "station": "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "addCaseDate": "",
+            "due": "2026-06-18",
+            "systemDue": "2026-06-18",
+            "workType": "Management Agreement",
+            "totalSla": 24,
+            "used": 62,
+            "days": 62,
+            "balance": -38,
+            "alert": "Red >>R=At Risk",
+            "remark": "Place: Yenakart | Source Status: In Process | Legal Tracking: L109-69 | Received: 15 May 2026",
+            "accessLevel": "Confidential",
+            "visibility": "Restricted access / จำกัดสิทธิ์",
+            "category": "Confidential"
+      }
+];
 
 
 
@@ -9742,7 +10406,988 @@
 
 
 
-    const logRecords = [];
+    const logRecords = [
+      [
+            "CT-N-OP-001",
+            "1",
+            "1",
+            "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "2026-04-21",
+            "",
+            "20",
+            "80",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-002",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-02-05",
+            "",
+            "20",
+            "133",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-003",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-03-30",
+            "",
+            "20",
+            "96",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-004",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-03-13",
+            "",
+            "20",
+            "107",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-005",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-04-16",
+            "",
+            "20",
+            "83",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-006",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-02-05",
+            "",
+            "20",
+            "133",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-007",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-03-20",
+            "",
+            "20",
+            "102",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-008",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-02-10",
+            "",
+            "22",
+            "130",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-IT-001",
+            "1",
+            "1",
+            "From Kawinphop Champee (Boss) >> To Siwaporn Iamwiboon (Grace)",
+            "Kawinphop Champee (Boss)",
+            "Siwaporn Iamwiboon (Grace)",
+            "2026-02-23",
+            "",
+            "22",
+            "121",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-BD-001",
+            "1",
+            "1",
+            "From Supakorn Teerawutthiporn (PJ) >> To Supakorn Teerawutthiporn (PJ)",
+            "Supakorn Teerawutthiporn (PJ)",
+            "Supakorn Teerawutthiporn (PJ)",
+            "2026-03-19",
+            "",
+            "24",
+            "103",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-BD-002",
+            "1",
+            "1",
+            "From Supakorn Teerawutthiporn (PJ) >> To Supakorn Teerawutthiporn (PJ)",
+            "Supakorn Teerawutthiporn (PJ)",
+            "Supakorn Teerawutthiporn (PJ)",
+            "2026-04-30",
+            "",
+            "20",
+            "73",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-MKT-001",
+            "1",
+            "1",
+            "From Nithita Aroonchote (Ploy) >> To Nithita Aroonchote (Ploy)",
+            "Nithita Aroonchote (Ploy)",
+            "Nithita Aroonchote (Ploy)",
+            "2026-04-09",
+            "",
+            "24",
+            "88",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-009",
+            "1",
+            "1",
+            "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "2026-04-08",
+            "",
+            "22",
+            "89",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-ADMIN-001",
+            "1",
+            "1",
+            "From Nattanai Saranpumidech (Ohm) >> To Nattanai Saranpumidech (Ohm)",
+            "Nattanai Saranpumidech (Ohm)",
+            "Nattanai Saranpumidech (Ohm)",
+            "2026-04-16",
+            "",
+            "22",
+            "83",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-010",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-04-24",
+            "",
+            "22",
+            "77",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-MKT-002",
+            "1",
+            "1",
+            "From Pattarat Piamsin (Mind) >> To Pattarat Piamsin (Mind)",
+            "Pattarat Piamsin (Mind)",
+            "Pattarat Piamsin (Mind)",
+            "2026-05-21",
+            "",
+            "24",
+            "58",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-011",
+            "1",
+            "1",
+            "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "2026-05-25",
+            "",
+            "22",
+            "56",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-012",
+            "1",
+            "1",
+            "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "2026-05-25",
+            "",
+            "22",
+            "56",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-013",
+            "1",
+            "1",
+            "From Ratchaneekul Yamkate (Koy) >> To Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "Ratchaneekul Yamkate (Koy)",
+            "2026-05-25",
+            "",
+            "20",
+            "56",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-C-FIN-001",
+            "1",
+            "1",
+            "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "2026-05-15",
+            "",
+            "24",
+            "62",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-MKT-003",
+            "1",
+            "1",
+            "From Pijitporn Atjima-anan (Mod) >> To Pijitporn Atjima-anan (Mod)",
+            "Pijitporn Atjima-anan (Mod)",
+            "Pijitporn Atjima-anan (Mod)",
+            "2026-06-05",
+            "",
+            "24",
+            "47",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-014",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-06-04",
+            "",
+            "20",
+            "48",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "20",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-C-FIN-002",
+            "1",
+            "1",
+            "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "2026-05-15",
+            "",
+            "24",
+            "62",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-C-FIN-003",
+            "1",
+            "1",
+            "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "2026-05-15",
+            "",
+            "24",
+            "62",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-C-FIN-004",
+            "1",
+            "1",
+            "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "2026-05-15",
+            "",
+            "24",
+            "62",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-C-FIN-005",
+            "1",
+            "1",
+            "From Atsanai Banmai (Bank) >> To Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "Atsanai Banmai (Bank)",
+            "2026-05-15",
+            "",
+            "24",
+            "62",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-015",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-06-23",
+            "",
+            "22",
+            "35",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "22",
+            "",
+            "",
+            [],
+            []
+      ],
+      [
+            "CT-N-OP-016",
+            "1",
+            "1",
+            "From Preeyapas Srinon (Nan) >> To Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "Preeyapas Srinon (Nan)",
+            "2026-06-23",
+            "",
+            "24",
+            "35",
+            "Red >>R=At Risk",
+            "",
+            "Draft Created",
+            "Draft Created by Production Import",
+            "OK",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Production Import",
+            "2026-08-11T09:40:42.165Z",
+            "",
+            "",
+            "Draft Created",
+            "",
+            "Imported from อะไรล่ะนั่น.xlsx",
+            "24",
+            "",
+            "",
+            [],
+            []
+      ]
+];
 
 
 
@@ -10056,7 +11701,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10076,7 +11721,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10096,7 +11741,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10116,7 +11761,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10136,7 +11781,7 @@
             "fixedSla": 24,
             "remark": "แก้คำจาก “สุภาภิบาล”",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10156,7 +11801,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10176,7 +11821,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10196,7 +11841,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10216,7 +11861,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Interior",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10236,7 +11881,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Contractor",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10256,7 +11901,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10276,7 +11921,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10296,7 +11941,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10316,7 +11961,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (1/2)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10336,7 +11981,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (2/2)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10356,7 +12001,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10376,7 +12021,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10396,7 +12041,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10416,7 +12061,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10436,7 +12081,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10456,7 +12101,7 @@
             "fixedSla": 20,
             "remark": "สัญญาเช่าทั่วไป",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10476,7 +12121,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10496,7 +12141,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10516,7 +12161,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10536,7 +12181,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10556,7 +12201,7 @@
             "fixedSla": 22,
             "remark": "บริการรับ–ส่งเอกสารและสิ่งของ",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10576,7 +12221,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10596,7 +12241,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10616,7 +12261,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10636,7 +12281,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10656,7 +12301,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10676,7 +12321,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10696,7 +12341,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10716,7 +12361,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Service Contract Order",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10736,7 +12381,7 @@
             "fixedSla": 20,
             "remark": "แยกจากรายการชื่อเดียวกัน (1/3)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10756,7 +12401,7 @@
             "fixedSla": 20,
             "remark": "แยกจากรายการชื่อเดียวกัน (2/3)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10776,7 +12421,7 @@
             "fixedSla": 20,
             "remark": "แยกจากรายการชื่อเดียวกัน (3/3)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10796,7 +12441,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10816,7 +12461,7 @@
             "fixedSla": 24,
             "remark": "เดิม: สัญญาจ้างบริหาร",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10836,7 +12481,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (1/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10856,7 +12501,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (2/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10876,7 +12521,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (3/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10896,7 +12541,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (4/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10916,7 +12561,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (5/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10936,7 +12581,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (6/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10956,7 +12601,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (7/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10976,7 +12621,7 @@
             "fixedSla": 22,
             "remark": "แยกจากรายการชื่อเดียวกัน (8/8)",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -10996,7 +12641,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11016,7 +12661,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11036,7 +12681,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11056,7 +12701,7 @@
             "fixedSla": 22,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11076,7 +12721,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11096,7 +12741,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Confident-001",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11116,7 +12761,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Confident-002",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11136,7 +12781,7 @@
             "fixedSla": 20,
             "remark": "เดิม: Confident-003",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11156,7 +12801,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Confident-004",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11176,7 +12821,7 @@
             "fixedSla": 28,
             "remark": "เดิม: Confident-005",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11196,7 +12841,7 @@
             "fixedSla": 28,
             "remark": "เดิม: Confident-006",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11216,7 +12861,7 @@
             "fixedSla": 28,
             "remark": "เดิม: Confident-007",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Confidential / สัญญาลับ",
@@ -11236,7 +12881,7 @@
             "fixedSla": 24,
             "remark": "เดิม: Confident-008",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11256,7 +12901,7 @@
             "fixedSla": 20,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       },
       {
             "classification": "Day-to-day Work / งานดำเนินงานทั่วไป",
@@ -11276,7 +12921,7 @@
             "fixedSla": 24,
             "remark": "—",
             "active": "Yes",
-            "slaVersion": "2026-08-05-sla-config-updated1-v1"
+            "slaVersion": "2026-08-14-others-by-classification-v1"
       }
 ];
     const contractTypeMasterV2 = Object.freeze([
@@ -12417,7 +14062,7 @@
                         "Type of Contract": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
                         "Sub Type of Contract": "Lease Agreement / สัญญาเช่า",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า"
                   },
                   {
@@ -12427,7 +14072,7 @@
                         "Type of Contract": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
                         "Sub Type of Contract": "Sub Lease Agreement / สัญญาเช่าช่วง",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า"
                   },
                   {
@@ -12437,7 +14082,7 @@
                         "Type of Contract": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
                         "Sub Type of Contract": "Lease Asset Agreement / สัญญาเช่าทรัพย์สิน",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า"
                   },
                   {
@@ -12447,7 +14092,7 @@
                         "Type of Contract": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า",
                         "Sub Type of Contract": "Rental Agreement / สัญญาเช่าทั่วไป",
                         "Fixed SLA (Working Days)": 22,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Lease & Rental Agreement / สัญญาเช่าและให้เช่า"
                   },
                   {
@@ -12457,7 +14102,7 @@
                         "Type of Contract": "Service Agreement / สัญญาให้บริการ",
                         "Sub Type of Contract": "",
                         "Fixed SLA (Working Days)": 22,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Service Agreement / สัญญาให้บริการ"
                   },
                   {
@@ -12467,7 +14112,7 @@
                         "Type of Contract": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม",
                         "Sub Type of Contract": "",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Amendment Agreement / สัญญาแก้ไขเพิ่มเติม"
                   },
                   {
@@ -12477,7 +14122,7 @@
                         "Type of Contract": "Sale and Purchase Agreement / สัญญาซื้อขาย",
                         "Sub Type of Contract": "",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Sale and Purchase Agreement / สัญญาซื้อขาย"
                   },
                   {
@@ -12487,7 +14132,7 @@
                         "Type of Contract": "Outsourcing Agreement / สัญญาจ้าง",
                         "Sub Type of Contract": "",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Outsourcing Agreement / สัญญาจ้าง"
                   },
                   {
@@ -12497,7 +14142,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Consultancy Agreement / สัญญาให้คำปรึกษา",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12507,7 +14152,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Confidentiality Agreement / สัญญารักษาความลับ",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12517,7 +14162,7 @@
                         "Type of Contract": "Others / อื่น ๆ",
                         "Sub Type of Contract": "",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Others / อื่น ๆ"
                   },
                   {
@@ -12527,7 +14172,7 @@
                         "Type of Contract": "Preliminary Agreement / ข้อตกลงเบื้องต้น",
                         "Sub Type of Contract": "Memorandum of Understanding / บันทึกความเข้าใจ",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Preliminary Agreement / ข้อตกลงเบื้องต้น"
                   },
                   {
@@ -12537,7 +14182,7 @@
                         "Type of Contract": "Preliminary Agreement / ข้อตกลงเบื้องต้น",
                         "Sub Type of Contract": "Term Sheet / เอกสารสรุปเงื่อนไขเบื้องต้น",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Preliminary Agreement / ข้อตกลงเบื้องต้น"
                   },
                   {
@@ -12547,7 +14192,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Consultancy Agreement / สัญญาให้คำปรึกษา",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12557,7 +14202,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Confidentiality Agreement / สัญญารักษาความลับ",
                         "Fixed SLA (Working Days)": 20,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12567,7 +14212,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Management Agreement / สัญญาบริหารจัดการ",
                         "Fixed SLA (Working Days)": 24,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12577,7 +14222,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Loan Agreement / สัญญาเงินกู้",
                         "Fixed SLA (Working Days)": 28,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12587,7 +14232,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Mergers and Acquisitions Agreement / สัญญาการควบรวมและซื้อกิจการ",
                         "Fixed SLA (Working Days)": 28,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -12597,7 +14242,7 @@
                         "Type of Contract": "Commercial Agreement / สัญญาทางธุรกิจ",
                         "Sub Type of Contract": "Shareholders’ Agreement / สัญญาระหว่างผู้ถือหุ้น",
                         "Fixed SLA (Working Days)": 28,
-                        "Standard SLA Version": "2026-08-05-sla-config-updated1-v1",
+                        "Standard SLA Version": "2026-08-14-others-by-classification-v1",
                         "Description / คำอธิบาย": "Commercial Agreement / สัญญาทางธุรกิจ"
                   },
                   {
@@ -13270,7 +14915,6 @@
       authenticatedApplicationInitialized = true;
       initializeEditableDropdowns();
       setupUpdateAttachmentAndCc();
-      setupCloseCaseEmail();
       setCaseActionStep("add");
       setupCsvDatabaseControls();
       setupMasterDataControls();
@@ -13377,7 +15021,7 @@
           totalSla: 7,
           vendor: "Approved Supplier Co."
         },
-        "Project Management": {
+        "Project Manager": {
           contractBase: "Project and Construction Agreement",
           type: "Project Contract",
           workType: "Lease / Rental",
@@ -14007,25 +15651,10 @@
       const rows = labels.map(item => {
         const yellowCount = countFn(item.value, "Y");
         const redCount = countFn(item.value, "R");
-        return {
-          label: item.label,
-          yellowCount,
-          redCount,
-          priorityTotal: yellowCount + redCount,
-          total: yellowCount + redCount
-        };
+        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount };
       }).filter(row => row.total > 0)
-        .sort((a, b) =>
-          b.priorityTotal - a.priorityTotal ||
-          b.redCount - a.redCount ||
-          b.yellowCount - a.yellowCount ||
-          a.label.localeCompare(b.label, "en", { sensitivity: "base" })
-        );
-
-      if (!rows.length) {
-        return `<div class="empty-state">No Alert records</div>`;
-      }
-
+        .sort((a, b) => b.priorityTotal - a.priorityTotal || b.redCount - a.redCount || b.yellowCount - a.yellowCount || a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
+      if (!rows.length) return `<div class="empty-state">No Alert records</div>`;
       const maxTotal = Math.max(1, ...rows.map(row => row.total));
       return `
         <div class="horizontal-status-chart">
@@ -14036,12 +15665,10 @@
             return `
               <div class="horizontal-status-row" title="${escapeHtml(row.label)}: ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
                 <div class="horizontal-status-label">${escapeHtml(row.label)}</div>
-                <div class="horizontal-status-track">
-                  <div class="horizontal-status-stack" style="width:${totalWidth}%">
-                    ${row.yellowCount > 0 ? `<div class="horizontal-status-segment delayed" style="width:${yellowWidth}%" aria-label="${escapeHtml(yellowLabel)} ${row.yellowCount}">${row.yellowCount}</div>` : ""}
-                    ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
-                  </div>
-                </div>
+                <div class="horizontal-status-track"><div class="horizontal-status-stack" style="width:${totalWidth}%">
+                  ${row.yellowCount > 0 ? `<div class="horizontal-status-segment delayed" style="width:${yellowWidth}%" aria-label="${escapeHtml(yellowLabel)} ${row.yellowCount}">${row.yellowCount}</div>` : ""}
+                  ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
+                </div></div>
                 <div class="horizontal-status-total">${row.total}</div>
               </div>`;
           }).join("")}
@@ -14488,32 +16115,22 @@
       const subtitle = document.querySelector("#logActionReasonSubtitle");
       const body = document.querySelector("#logActionReasonBody");
       if (!modal || !subtitle || !body || !row) return;
-
       const actionEn = row[25] || row[12] || "-";
       const actionTh = row[24] || "-";
-      const descriptionEn = row[27] || "";
-      const descriptionTh = row[26] || "";
-      const reasonTypeEn = row[30] || row[16] || "";
-      const reasonTypeTh = row[29] || "";
-      const reasonDetail = row[17] || row[13] || row[11] || "";
-      const approval = logApprovalText(row);
-      const correctiveAction = row[20] || row[15] || "";
-      const actionSla = row[28] || row[8] || "-";
       const currentContract = contracts.find(item => item.id === row[0]);
       const detailRows = [
         ["Action", "การดำเนินการ", actionEn, actionTh],
         ["Alert", "การแจ้งเตือน", row[10] || "-", ""],
         ["Status Update", "สถานะปัจจุบัน", currentContract?.status || currentContract?.alert || row[10] || "-", ""],
-        ["Description", "คำอธิบาย", descriptionEn, descriptionTh],
-        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
-        ["Reason", "เหตุผล", reasonDetail, ""],
+        ["Description", "คำอธิบาย", row[27] || "", row[26] || ""],
+        ["Reason Type", "ประเภทเหตุผล", row[30] || row[16] || "", row[29] || ""],
+        ["Reason", "เหตุผล", row[17] || row[13] || row[11] || "", ""],
         ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],
-        ["Approval", "การอนุมัติ", approval === "-" ? "" : approval, ""],
-        ["Corrective Action", "การแก้ไข", correctiveAction, ""],
-        ["SLA", "ระยะเวลาดำเนินการ", actionSla, ""],
+        ["Approval", "การอนุมัติ", logApprovalText(row) === "-" ? "" : logApprovalText(row), ""],
+        ["Corrective Action", "การแก้ไข", row[20] || row[15] || "", ""],
+        ["SLA", "ระยะเวลาดำเนินการ", row[28] || row[8] || "-", ""],
         ["Updated By", "ผู้บันทึก", row[21] || "", row[22] ? formatDateTime(row[22]) : ""]
       ].filter(([, , primary, secondary]) => String(primary || "").trim() || String(secondary || "").trim());
-
       subtitle.textContent = `${row[0]} · Log ${row[1]} · Cycle ${row[2]}`;
       body.innerHTML = `<div class="detail-section"><div class="log-action-reason-grid">${detailRows.length ? detailRows.map(([labelEn, labelTh, valueEn, valueTh]) => `
         <div class="log-action-reason-row">
@@ -14823,7 +16440,6 @@ Tracking Contracts System</div>
     const UPDATE_ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png"]);
     const UPDATE_BLOCKED_EXTENSIONS = new Set(["exe", "bat", "cmd", "com", "js", "msi"]);
     let updateAttachmentQueue = [];
-    let closeAttachmentQueue = [];
     let updateCcRecipients = [];
     let updateFileSequence = 1;
 
@@ -14933,91 +16549,6 @@ Tracking Contracts System</div>
       if (input) input.value = "";
       setAttachmentValidation();
       renderUpdateAttachmentQueue();
-    }
-
-    function renderCloseAttachmentQueue() {
-      const list = document.querySelector("#closeAttachmentList");
-      const count = document.querySelector("#closeAttachmentCount");
-      if (count) count.innerHTML = `<span class="en">${closeAttachmentQueue.length} file${closeAttachmentQueue.length === 1 ? "" : "s"}</span><span class="th">${closeAttachmentQueue.length} ไฟล์</span>`;
-      if (!list) return;
-      list.hidden = closeAttachmentQueue.length === 0;
-      list.innerHTML = closeAttachmentQueue.map(item => `
-        <div class="attachment-row" data-close-attachment-queue-id="${escapeHtml(item.queueId)}">
-          <span class="attachment-file-name" title="${escapeHtml(item.originalFileName)}">${escapeHtml(item.originalFileName)}</span>
-          <span class="attachment-file-size">${escapeHtml(formatUpdateFileSize(item.fileSize))}</span>
-          <span class="attachment-file-status">${escapeHtml(item.status || "Ready")}</span>
-          <button class="attachment-remove" type="button" data-remove-close-attachment="${escapeHtml(item.queueId)}">Remove</button>
-        </div>`).join("");
-    }
-
-    function setCloseAttachmentValidation(messageEn = "", messageTh = "") {
-      const section = document.querySelector("#closeAttachmentSection");
-      const error = document.querySelector("#closeAttachmentError");
-      if (!section || !error) return;
-      const hasError = Boolean(messageEn || messageTh);
-      section.classList.toggle("validation-error", hasError);
-      section.setAttribute("aria-invalid", String(hasError));
-      error.innerHTML = hasError ? `<span class="en">${escapeHtml(messageEn)}</span><span class="th">${escapeHtml(messageTh)}</span>` : "";
-    }
-
-    function addFilesToCloseQueue(fileList) {
-      const files = [...(fileList || [])];
-      if (!files.length) return;
-      setCloseAttachmentValidation();
-      if (closeAttachmentQueue.length + files.length > UPDATE_MAX_FILES) {
-        setCloseAttachmentValidation("You can attach up to 10 files per close case.", "สามารถแนบไฟล์ได้สูงสุด 10 ไฟล์ต่อการปิดเคส");
-        return;
-      }
-      const invalidType = files.find(file => {
-        const extension = updateFileExtension(file.name);
-        return UPDATE_BLOCKED_EXTENSIONS.has(extension) || !UPDATE_ALLOWED_EXTENSIONS.has(extension);
-      });
-      if (invalidType) {
-        setCloseAttachmentValidation("This file type is not allowed.", `ไม่รองรับไฟล์ ${invalidType.name}`);
-        return;
-      }
-      const oversized = files.find(file => Number(file.size) > UPDATE_MAX_FILE_SIZE);
-      if (oversized) {
-        setCloseAttachmentValidation("The file size must not exceed 20 MB.", `ขนาดไฟล์ ${oversized.name} ต้องไม่เกิน 20 MB`);
-        return;
-      }
-      const queuedAt = Date.now();
-      files.forEach((file, index) => closeAttachmentQueue.push({
-        queueId: `CLOSE-${queuedAt}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-        file,
-        fileName: updateStoredFileName(file.name),
-        originalFileName: file.name,
-        fileSize: Number(file.size) || 0,
-        mimeType: file.type || "application/octet-stream",
-        status: "Ready"
-      }));
-      renderCloseAttachmentQueue();
-    }
-
-    function removeCloseAttachment(queueId) {
-      closeAttachmentQueue = closeAttachmentQueue.filter(item => item.queueId !== queueId);
-      setCloseAttachmentValidation();
-      renderCloseAttachmentQueue();
-    }
-
-    function resetCloseAttachments() {
-      closeAttachmentQueue = [];
-      const input = document.querySelector("#closeAttachmentInput");
-      if (input) input.value = "";
-      setCloseAttachmentValidation();
-      renderCloseAttachmentQueue();
-    }
-
-    function syncCloseRecipientEmail(force = false) {
-      const form = document.querySelector("#closeCaseForm");
-      const emailInput = document.querySelector("#closeToEmail");
-      if (!form || !emailInput) return;
-      const toValue = String(form.elements.to?.value || "").trim();
-      const linkedEmail = updateEmailPattern(toValue) ? toValue.toLowerCase() : emailForPerson(toValue);
-      if (force || emailInput.dataset.linkedTo !== toValue) {
-        emailInput.value = linkedEmail;
-        emailInput.dataset.linkedTo = toValue;
-      }
     }
 
     function updateCcDirectoryOptions() {
@@ -15175,8 +16706,8 @@ Tracking Contracts System</div>
       if (!required) setAttachmentValidation();
     }
 
-    function prepareUploadedAttachments({ contractId, logId, action, updatedBy, uploadedAt, items = updateAttachmentQueue }) {
-      return items.map((item, index) => ({
+    function prepareUploadedAttachments({ contractId, logId, action, updatedBy, uploadedAt }) {
+      return updateAttachmentQueue.map((item, index) => ({
         fileId: `FILE-${Date.now()}-${String(index + 1).padStart(2, "0")}`,
         fileName: item.fileName,
         originalFileName: item.originalFileName,
@@ -15314,36 +16845,6 @@ Tracking Contracts System</div>
           const row = logRecords.find(item => item[0] === metaButton.dataset.contractId && String(item[1]) === String(metaButton.dataset.logNo));
           if (row) openLogMetaDetail(row, metaButton.dataset.logMeta);
         }
-      });
-    }
-
-    function setupCloseCaseEmail() {
-      renderCloseAttachmentQueue();
-      const fileInput = document.querySelector("#closeAttachmentInput");
-      const attachButton = document.querySelector("#closeAttachFilesBtn");
-      const dropzone = document.querySelector("#closeAttachmentDropzone");
-      attachButton?.addEventListener("click", () => fileInput?.click());
-      fileInput?.addEventListener("change", event => {
-        addFilesToCloseQueue(event.currentTarget.files);
-        event.currentTarget.value = "";
-      });
-      ["dragenter", "dragover"].forEach(type => dropzone?.addEventListener(type, event => {
-        event.preventDefault();
-        event.stopPropagation();
-        dropzone.classList.add("is-dragover");
-      }));
-      ["dragleave", "drop"].forEach(type => dropzone?.addEventListener(type, event => {
-        event.preventDefault();
-        event.stopPropagation();
-        dropzone.classList.remove("is-dragover");
-      }));
-      dropzone?.addEventListener("drop", event => addFilesToCloseQueue(event.dataTransfer?.files));
-      document.addEventListener("click", event => {
-        const removeAttachment = event.target.closest("[data-remove-close-attachment]");
-        if (!removeAttachment) return;
-        event.preventDefault();
-        event.stopPropagation();
-        removeCloseAttachment(removeAttachment.dataset.removeCloseAttachment);
       });
     }
 
@@ -15790,12 +17291,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!endpoint) {
         throw new Error("Missing Apps Script Web App URL. Deploy the Apps Script and paste the URL into ATTACHMENT_UPLOAD_ENDPOINT.");
       }
-      const emailAttachmentQueue = draft.source === "close-case" ? closeAttachmentQueue : updateAttachmentQueue;
-      emailAttachmentQueue.forEach(item => {
+      updateAttachmentQueue.forEach(item => {
         item.status = "Sending email";
       });
-      if (draft.source === "close-case") renderCloseAttachmentQueue();
-      else renderUpdateAttachmentQueue();
+      renderUpdateAttachmentQueue();
       const requestId = `EMAIL-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const attachments = await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload));
       const response = await fetch(endpoint, {
@@ -15824,9 +17323,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         : await response.json().catch(() => ({}));
       if ((response.type !== "opaque" && !response.ok) || !result.success) throw new Error(result.error || "Send email failed");
       (result.files || []).forEach(file => {
-        const match = emailAttachmentQueue.find(item =>
-          item.fileName === file.fileName || item.originalFileName === file.originalFileName
-        ) || (draft.attachments || []).find(item =>
+        const match = updateAttachmentQueue.find(item =>
           item.fileName === file.fileName || item.originalFileName === file.originalFileName
         );
         if (!match) return;
@@ -15835,8 +17332,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         match.downloadUrl = file.downloadUrl || match.downloadUrl || "";
         match.status = "Email sent";
       });
-      if (draft.source === "close-case") renderCloseAttachmentQueue();
-      else renderUpdateAttachmentQueue();
+      renderUpdateAttachmentQueue();
       return result;
     }
 
@@ -15950,56 +17446,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       };
     }
 
-    function buildCloseCaseEmailDraft({ contract, stage, owner, to, email, attachments = [], closeDate }) {
-      const contractId = String(contract?.id || "").trim();
-      const contractName = String(contract?.name || "").trim();
-      const recipientName = String(to || email || "Team").trim();
-      const closeDateText = formatDateForEmail(closeDate || todayInputValue());
-      const systemUrl = "https://turtletwentythree.github.io/Project-Contract-tracking/";
-      const subject = `[Contract Tracking] Close Case: ${contractId} - ${contractName}`;
-      const body = [
-        `Dear ${recipientName},`,
-        "",
-        `Contract ID: ${contractId}`,
-        `Contract Name: ${contractName}`,
-        `Close Status: ${stage}`,
-        `Final Contract Owner: ${owner || "-"}`,
-        `Close Date: ${closeDateText}`,
-        `System Link: ${systemUrl}`,
-        "",
-        "The contract case has been closed in the Contract Tracking System.",
-        "",
-        `เรียน ${recipientName}`,
-        "",
-        `รหัสสัญญา: ${contractId}`,
-        `ชื่อสัญญา: ${contractName}`,
-        `สถานะการปิดเคส: ${stage}`,
-        `เจ้าของสัญญาสุดท้าย: ${owner || "-"}`,
-        `วันที่ปิดเคส: ${closeDateText}`,
-        `ลิงก์ระบบ: ${systemUrl}`,
-        "",
-        "รายการสัญญาถูกปิดในระบบ Contract Tracking เรียบร้อยแล้ว",
-        "",
-        "Contract Tracking System"
-      ].join("\n");
-      return {
-        to: email || "",
-        cc: "",
-        ccList: [],
-        subject,
-        body,
-        attachments,
-        contractId,
-        action: stage,
-        source: "close-case",
-        emailTitle: "Send Close Case Email"
-      };
-    }
-
     function openStatusEmailPopup(draft) {
       const modal = document.querySelector("#statusEmailModal");
       if (!modal) return;
-      document.querySelector("#statusEmailTitle").textContent = draft.emailTitle || "Send Status Update Email";
       document.querySelector("#statusEmailTo").value = draft.to || "";
       statusEmailCcRecipients = statusEmailCcItemsFrom(draft.ccList || draft.cc || "");
       document.querySelector("#statusEmailSubject").value = draft.subject || "";
@@ -16063,7 +17512,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           button.textContent = "Sending...";
         }
         const result = await sendStatusEmailViaEndpoint(draft);
-        saveContractsDatabase();
         showToast(`Status update email sent${result.files?.length ? ` with ${result.files.length} cloud attachment link(s)` : ""}.`);
         closeStatusEmailPopup();
       } catch (error) {
@@ -16260,7 +17708,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         "Marketing",
         "Operation",
         "Procurement",
-        "Project Management"
+        "Project Manager"
       ]);
     }
 
@@ -16455,27 +17903,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return latest[7] || latest[6] || "";
     }
 
-    function accumulatedContractDays(contract, referenceDate = todayInputValue()) {
-      if (!contract) return 0;
-      const startDate = addCaseStartDateForContract(contract);
-      if (!startDate) return Number(contract.used || contract.days || 0) || 0;
-      if (isClosedAction(contract.stage)) {
-        const closeDate = latestCloseDate(contract.id);
-        return closeDate ? calculateDaysOnHand(startDate, closeDate) : Number(contract.used || contract.days || 0) || 0;
-      }
-      return calculateDaysOnHand(startDate, referenceDate);
-    }
-
-    function configuredTotalSlaForContract(contract) {
-      if (!contract) return 0;
-      const classification = contract.category || (contract.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
-      const workTypeSla = fixedSlaFromMasterData(contract.workType, contract.name, classification);
-      if (Number(workTypeSla) > 0) return Number(workTypeSla);
-      const typeSla = fixedSlaFromMasterData(contract.type, contract.name, classification);
-      if (Number(typeSla) > 0) return Number(typeSla);
-      return Number(contract.totalSla || totalSlaFor(contract.type || contract.workType, contract.name, classification) || 0) || 0;
-    }
-
     function upsertDashboardData(item) {
       const closed = !isPendingContract(item);
       const closeDate = latestCloseDate(item.id);
@@ -16658,9 +18085,34 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return dateToInputValue(contract.addCaseDate || firstLogFor(contract.id)?.[6] || "");
     }
 
-    function recalculateLogTiming(row) {
+    function accumulatedContractDays(contract, referenceDate = todayInputValue()) {
+      if (!contract) return 0;
+      const startDate = addCaseStartDateForContract(contract);
+      if (!startDate) return Number(contract.used || contract.days || 0) || 0;
+      if (isClosedAction(contract.stage)) {
+        const closeDate = latestCloseDate(contract.id);
+        return closeDate ? calculateDaysOnHand(startDate, closeDate) : Number(contract.used || contract.days || 0) || 0;
+      }
+      return calculateDaysOnHand(startDate, referenceDate);
+    }
+
+    function configuredTotalSlaForContract(contract) {
+      if (!contract) return 0;
+      const classification = contract.category || (contract.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
+      const workTypeSla = fixedSlaFromMasterData(contract.workType, contract.name, classification);
+      if (Number(workTypeSla) > 0) return Number(workTypeSla);
+      const typeSla = fixedSlaFromMasterData(contract.type, contract.name, classification);
+      if (Number(typeSla) > 0) return Number(typeSla);
+      return Number(contract.totalSla || totalSlaFor(contract.type || contract.workType, contract.name, classification) || 0) || 0;
+    }
+
+    function recalculateLogTiming(row, isCurrentAction = false) {
       if (!Array.isArray(row)) return row;
-      row[9] = calculateDaysOnHand(row[6], row[7]);
+      // Legacy/current rows may already have Out populated even though the case
+      // is still open. Treat that handoff date as day 0 for the active station.
+      const timingStart = isCurrentAction && row[7] ? row[7] : row[6];
+      const timingEnd = isCurrentAction ? "" : row[7];
+      row[9] = calculateDaysOnHand(timingStart, timingEnd);
       row[10] = calculateAlert(row[12], row[9], row[8]);
       return row;
     }
@@ -16668,7 +18120,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     function syncContractTimingFromLogs(contract) {
       if (!contract) return contract;
       const rows = logRecords.filter(row => row[0] === contract.id);
-      rows.forEach(recalculateLogTiming);
+      const contractIsOpen = !isClosedAction(contract.stage);
+      rows.forEach((row, index) => recalculateLogTiming(row, contractIsOpen && index === rows.length - 1));
       const latest = rows.slice(-1)[0] || null;
       const startDate = addCaseStartDateForContract(contract);
       contract.addCaseDate = startDate;
@@ -17450,7 +18903,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         ariaLabel: "Sub Type of Contract / ประเภทย่อยของสัญญา"
       });
       attachEditableDropdown("updateTo", () => directoryEmployeeOptions(), () => syncUpdateRecipientEmail(true));
-      attachEditableDropdown("closeTo", () => directoryEmployeeOptions(), () => syncCloseRecipientEmail(true));
 
       document.addEventListener("click", event => {
         editableDropdownRegistry.forEach((state, inputId) => {
@@ -17459,15 +18911,96 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
     }
 
+    function syncUserCaseActionSubmitState(formOrId) {
+      const form = typeof formOrId === "string" ? document.querySelector(`#${formOrId}`) : formOrId;
+      if (!form) return;
+      const submitButton = form.querySelector('[type="submit"]');
+      if (!submitButton) return;
+      submitButton.disabled = form.dataset.submitting === "true" || !form.checkValidity();
+    }
+
+    function syncAllUserCaseActionSubmitStates() {
+      ["addCaseForm", "updateStatusForm", "closeCaseForm", "dueDateAdjustmentForm"]
+        .forEach(syncUserCaseActionSubmitState);
+    }
+
+    function beginUserCaseActionSubmit(form) {
+      if (!form || form.dataset.submitting === "true") return false;
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        syncUserCaseActionSubmitState(form);
+        return false;
+      }
+      form.dataset.submitting = "true";
+      syncUserCaseActionSubmitState(form);
+      return true;
+    }
+
+    function finishUserCaseActionSubmit(form, reset = false) {
+      if (!form) return;
+      delete form.dataset.submitting;
+      if (reset) resetUserCaseActionForm(form.id);
+      else syncUserCaseActionSubmitState(form);
+    }
+
+    function resetUserCaseActionForm(formId) {
+      const form = document.querySelector(`#${formId}`);
+      if (!form) return;
+      form.reset();
+      delete form.dataset.submitting;
+      delete form.dataset.boundContractId;
+      [...form.elements].forEach(field => field.setCustomValidity?.(""));
+
+      if (formId === "addCaseForm") {
+        setContractClassificationButtons("Day-to-day Work");
+        resetInitialDueDateOverride();
+        syncAddCaseLinkedFields("classification");
+        syncDepartmentOwnerOptions(false);
+        refreshEditableDropdown("addOwner");
+      } else {
+        if (form.elements.contractId) form.elements.contractId.value = "";
+        lastUserContractId = "";
+      }
+
+      if (formId === "updateStatusForm") {
+        resetUpdateAttachments();
+        resetUpdateCcRecipients();
+        renderUpdateActionDescription("");
+        document.querySelector("#updateContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        syncUpdateRecipientEmail(true);
+        updateSlaPreviews();
+      } else if (formId === "closeCaseForm") {
+        document.querySelector("#closeContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+      } else if (formId === "dueDateAdjustmentForm") {
+        document.querySelector("#adjustDueContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        syncDueDateAdjustmentForm(true);
+      }
+      syncUserCaseActionSubmitState(form);
+    }
+
+    function initializeUserCaseActionGuards() {
+      ["addCaseForm", "updateStatusForm", "closeCaseForm", "dueDateAdjustmentForm"].forEach(formId => {
+        const form = document.querySelector(`#${formId}`);
+        if (!form || form.dataset.guardReady === "true") return;
+        form.dataset.guardReady = "true";
+        form.addEventListener("input", () => syncUserCaseActionSubmitState(form));
+        form.addEventListener("change", () => syncUserCaseActionSubmitState(form));
+      });
+      syncAllUserCaseActionSubmitStates();
+    }
+
     function populateUserControls() {
       refreshNewCaseIdPreview();
       // Contract selectors show Contract ID, Type of Contract, Contract Name, and Department for easier search.
       // Owner, Department, Stage and Status remain linked in the background only.
       const accessibleContracts = contractsVisibleToCurrentUser();
-      const contractOptions = accessibleContracts.map(item => ({
-        value: item.id,
-        label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
-      }));
+      const contractOptions = [
+        { value: "", label: "Select Contract / เลือกสัญญา" },
+        ...accessibleContracts.map(item => ({
+          value: item.id,
+          label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+        }))
+      ];
       const workTypes = orderedUniqueList([...Object.keys(fixedSlaConfig), ...uniqueWorkTypes()]);
       const contractCatalog = getContractFormCatalog();
       const contractTypes = orderedUniqueList(contractCatalog.map(item => item.type).filter(Boolean));
@@ -17479,14 +19012,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       fillDatalist("departmentOptions", directoryDepartments());
       fillDatalist("peopleOptions", directoryPeopleOptions());
       fillDatalist("workTypeOptions", workTypes);
-      setInputValueIfEmpty("addDepartment", "IT");
       syncDepartmentOwnerOptions(false);
-      setInputValueIfEmpty("addOwner", employeesForDepartment(document.querySelector("#addDepartment")?.value)[0]?.name || "Kawinphop Champee (Boss)");
-      syncDepartmentOwnerOptions(false);
-      setInputValueIfEmpty("updateTo", "Siwaporn Iamwiboon (Grace)");
-      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
-      fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
-      fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
+      fillSelect("updateContract", contractOptions, lastUserContractId || "");
+      fillSelect("closeContract", contractOptions, lastUserContractId || "");
+      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");
       ["updateContract", "closeContract", "adjustDueContract"].forEach(selectId => {
         const select = document.querySelector(`#${selectId}`);
         if (!select) return;
@@ -17522,6 +19051,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncUpdateRecipientEmail(false);
       syncDueApprovalRecipientEmail(true);
       updateSlaPreviews();
+      initializeUserCaseActionGuards();
     }
 
     function workTypeTemplateForContractType(typeValue) {
@@ -17872,8 +19402,21 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const form = document.querySelector("#dueDateAdjustmentForm");
       if (!form) return;
       const accessibleContracts = contractsVisibleToCurrentUser();
-      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value) || accessibleContracts[0];
-      if (!contract) return;
+      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value);
+      if (!contract) {
+        document.querySelector("#adjustDueContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        ["adjustSystemDue", "adjustCurrentDue", "dueRequestedBy", "adjustRequestedDue"].forEach(id => {
+          const input = document.querySelector(`#${id}`);
+          if (input) input.value = "";
+        });
+        const statusBadge = document.querySelector("#dueRequestStatus");
+        if (statusBadge) {
+          statusBadge.textContent = "Ready to Request";
+          statusBadge.className = "badge blue";
+        }
+        validateRequestedDueDate();
+        return;
+      }
       document.querySelector("#adjustDueContractSummary").innerHTML = contractSummaryMarkup(contract);
       const systemDue = contract.systemDue || addBusinessDays(latestLogFor(contract.id)?.[6] || todayInputValue(), totalSlaFor(contract.workType));
       const currentDue = contract.due || systemDue;
@@ -18101,9 +19644,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         if (force || boundId !== closeContract.id) {
           closeForm.elements.owner.value = closeContract.owner || "";
           closeForm.elements.closeDate.value = todayInputValue();
-          closeForm.elements.to.value = closeContract.owner || "";
           closeForm.dataset.boundContractId = closeContract.id;
-          syncCloseRecipientEmail(true);
         }
       }
     }
@@ -18675,14 +20216,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!contracts.some(item => item.id === selectedLogContractId)) selectedLogContractId = "all";
     }
 
-    function refreshDatabaseDrivenUi() {
-      refreshDashboardDataFromContracts();
-      renderAll();
-      editableDropdownRegistry.forEach((state, inputId) => {
-        if (state.wrapper.classList.contains("open")) refreshEditableDropdown(inputId);
-      });
-    }
-
     function updateDatabaseSyncStatus(message = "") {
       const status = document.querySelector("#databaseSyncStatus");
       if (!status) return;
@@ -18799,7 +20332,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         if (Array.isArray(parsed.logRecords)) logRecords.splice(0, logRecords.length, ...parsedLogs);
         if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase({ syncCloud: false });
         refreshDashboardDataFromContracts();
-        updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
+        updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}${migratedPendingDueRequestCount ? ` · ${migratedPendingDueRequestCount} Due Date request migrated` : ""}`);
       } catch (error) {
         updateDatabaseSyncStatus("Local database could not load");
       }
@@ -18863,6 +20396,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         hash = Math.imul(hash, 16777619);
       }
       return `${source.length}:${(hash >>> 0).toString(16)}`;
+    }
+
+    function refreshDatabaseDrivenUi() {
+      refreshDashboardDataFromContracts();
+      renderAll();
+      editableDropdownRegistry.forEach((state, inputId) => {
+        if (state.wrapper.classList.contains("open")) refreshEditableDropdown(inputId);
+      });
     }
 
     function driveDatabasePayloadFingerprint(payload) {
@@ -18946,7 +20487,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       isApplyingDriveDatabaseLoad = false;
       if (migratedSlaCount || migratedDepartmentCount || migratedActionCount || migratedPendingDueRequestCount) scheduleDriveDatabaseSave();
       refreshDatabaseDrivenUi();
-      updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}${migratedPendingDueRequestCount ? ` · ${migratedPendingDueRequestCount} Due Date request migrated` : ""}`);
+      updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       return true;
     }
 
@@ -19715,7 +21256,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	          "Action Data Version": actionDataVersion,
 	          Active: row.Active || "Yes"
 	        }));
-	      masterData.contractTemplates = readMasterRows("#masterTemplateRows", ["selectionLabel", "sourceRow", "classification", "typeGroup", "subType", "name", "vendor", "department", "fixedSla", "accessLevel", "active"], "name")
+		      masterData.contractTemplates = readMasterRows("#masterTemplateRows", ["selectionLabel", "sourceRow", "classification", "typeGroup", "subType", "name", "vendor", "department", "fixedSla", "accessLevel", "active"], "name")
 		        .map(row => {
 		          const classification = row.classification || classificationDisplayValue(row.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
 		          const type = String(row.subType || row.typeGroup || "").trim();
@@ -19962,6 +21503,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const requestedInitialDue = String(form.get("due") || "").trim();
       const finalDue = requestedInitialDue || systemDue;
       const initiallyAdjusted = finalDue !== systemDue;
+      if (!beginUserCaseActionSubmit(formElement)) return;
 
       const daysOnHand = calculateDaysOnHand(lockedInDate);
       const alert = calculateAlert("Draft Created", daysOnHand, totalSla);
@@ -20009,6 +21551,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         delayReason: "",
         action: "Draft Created"
       });
+      syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.length - 1;
       selectedLogContractId = id;
@@ -20016,6 +21559,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       saveContractsDatabase();
       renderAll();
       setView("user");
+      finishUserCaseActionSubmit(formElement, true);
       showToast(`${id} added · SLA ${totalSla} Working Days · Due ${finalDue}`);
     });
 
@@ -20058,6 +21602,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         showToast("Please enter a reason for the Due Date adjustment request.");
         return;
       }
+      if (!beginUserCaseActionSubmit(formElement)) return;
       const request = {
         requestId: `DDR-${String(Math.max(0, ...dueDateAdjustmentRequests.map(item => Number(String(item.requestId || "").replace(/\D/g, "")) || 0)) + 1).padStart(3, "0")}`,
         contractId: contract.id,
@@ -20118,7 +21663,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       await saveDriveDatabaseToCloud();
       renderAll();
       setView("user");
-      syncDueDateAdjustmentForm(true);
+      finishUserCaseActionSubmit(formElement, true);
       showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);
       openDueApprovalEmailPopup(draft);
     });
@@ -20133,9 +21678,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       // In / Out are system controlled and are intentionally hidden from the user form.
       const runtimeOut = todayInputValue();
       const latest = latestLogFor(contractId);
-      const runtimeIn = formElement.elements.inDate.value || latest?.[7] || latest?.[6] || runtimeOut;
+      // Close the previous active interval, then start the selected Action at day 0.
+      if (latest && !latest[7]) {
+        latest[7] = runtimeOut;
+        recalculateLogTiming(latest);
+      }
+      const runtimeIn = runtimeOut;
       formElement.elements.inDate.value = runtimeIn;
-      formElement.elements.outDate.value = runtimeOut;
+      formElement.elements.outDate.value = "";
 
       const form = new FormData(formElement);
       const action = String(form.get("action") || "");
@@ -20151,11 +21701,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const delayReason = "";
       const correctiveAction = "";
       const sla = Number(form.get("sla") || 0);
-      const days = calculateDaysOnHand(runtimeIn, runtimeOut);
+      const days = calculateDaysOnHand(runtimeIn);
       const alert = calculateAlert(action, days, sla);
 
       syncUpdateReasonRequirement(alert);
       if (!validateUpdateReasonBeforeAction()) return;
+      if (!beginUserCaseActionSubmit(formElement)) return;
 
       const nextCycle = action === "Resubmit" ? Number(contract.cycle || 1) + 1 : Number(contract.cycle || 1);
       const nextReturns = action === "Return" ? Number(contract.returns || 0) + 1 : Number(contract.returns || 0);
@@ -20169,7 +21720,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.balance = Number(contract.totalSla || 0) - Number(contract.used || 0);
       contract.status = calculateContractStatus(action, contract.used, contract.totalSla);
       contract.remark = actionReasonInput || delayReason || correctiveAction || contract.remark;
-      if (!await uploadQueuedAttachmentsToCloud()) return;
+      if (!await uploadQueuedAttachmentsToCloud()) {
+        finishUserCaseActionSubmit(formElement);
+        return;
+      }
 
       const updatedAt = localIsoDateTime();
       const nextLogNo = logRecords.filter(row => row[0] === contractId).length + 1;
@@ -20189,7 +21743,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         from,
         to,
         inDate: runtimeIn,
-        outDate: runtimeOut,
+        outDate: "",
         sla,
         delayReason,
         action,
@@ -20242,27 +21796,19 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       setView("user");
       showToast(`${contractId} updated · ${uploadedAttachments.length} file(s) · Email popup opened`);
       openStatusEmailPopup(emailDraft);
-      resetUpdateAttachments();
-      resetUpdateCcRecipients();
+      finishUserCaseActionSubmit(formElement, true);
     });
 
-    document.querySelector("#closeCaseForm").addEventListener("submit", async event => {
+    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
       const id = form.get("contractId");
       const contract = contractsVisibleToCurrentUser().find(item => item.id === id);
-      if (!contract) return;
+      if (!contract || !beginUserCaseActionSubmit(formElement)) return;
       const owner = String(form.get("owner") || contract.owner || "").trim();
       const closeDate = String(form.get("closeDate") || todayInputValue());
       const stage = form.get("stage");
-      const to = String(form.get("to") || "").trim();
-      syncCloseRecipientEmail(true);
-      const toEmail = String(document.querySelector("#closeToEmail")?.value || "").trim();
-      if (!toEmail) {
-        document.querySelector("#closeTo")?.focus();
-        showToast("Select a recipient with a valid email. / กรุณาเลือกผู้รับที่มีอีเมลถูกต้อง");
-        return;
-      }
       const alert = calculateAlert(stage, 0, 0);
       contract.stage = stage;
       contract.owner = owner;
@@ -20271,17 +21817,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.station = `From ${owner} >> To ${owner}`;
       contract.days = 0;
       contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
-      const updatedAt = localIsoDateTime();
-      const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
-      const logId = `LOG-${id.replace(/\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
-      const uploadedAttachments = prepareUploadedAttachments({
-        contractId: id,
-        logId,
-        action: stage,
-        updatedBy: currentUser.name || "Current User",
-        uploadedAt: updatedAt,
-        items: closeAttachmentQueue
-      });
       addLogRecord({
         contractId: id,
         cycle: contract.cycle,
@@ -20292,10 +21827,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         outDate: closeDate,
         sla: 0,
         delayReason: "",
-        action: stage,
-        attachments: uploadedAttachments,
-        updatedBy: currentUser.name || "Current User",
-        updatedAt
+        action: stage
       });
       syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
@@ -20305,18 +21837,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       saveContractsDatabase();
       renderAll();
       setView("user");
-      const emailDraft = buildCloseCaseEmailDraft({
-        contract,
-        stage,
-        owner,
-        to,
-        email: toEmail,
-        attachments: uploadedAttachments,
-        closeDate
-      });
-      showToast(`${id} closed · Email popup opened`);
-      openStatusEmailPopup(emailDraft);
-      resetCloseAttachments();
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${id} closed`);
     });
 
     ["updateContract", "closeContract", "adjustDueContract"].forEach(id => {
@@ -20353,8 +21875,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncUpdateRecipientEmail(true);
       validateUpdateCcRecipients();
     });
-    document.querySelector("#closeTo")?.addEventListener("input", () => syncCloseRecipientEmail(true));
-    document.querySelector("#closeTo")?.addEventListener("change", () => syncCloseRecipientEmail(true));
     document.querySelector("#closeUpdateReasonAlertModal")?.addEventListener("click", () => closeUpdateReasonAlertPopup(true));
     document.querySelector("#goToUpdateReasonBtn")?.addEventListener("click", () => closeUpdateReasonAlertPopup(true));
     document.querySelector("#updateReasonAlertModal")?.addEventListener("click", event => {
@@ -20603,8 +22123,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         return [
           ["Contract", selectedOptionText(field("contractId")), true],
           ["Close Status", selectedOptionText(field("stage"))],
-          ["To / ส่งถึง", value("to")],
-          ["Attachments / ไฟล์แนบ", `${closeAttachmentQueue.length} file${closeAttachmentQueue.length === 1 ? "" : "s"}`],
           ["Final Contract Owner", value("owner")],
           ["Close Date", formatConfirmationDate(field("closeDate")?.value)]
         ];
@@ -20967,20 +22485,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         .map(contract => {
           const statusCode = statusCodeFor(contract.status);
           if (!["Y", "R"].includes(statusCode)) return null;
-          const ownerRecord = lineOwnerRecord(contract.owner);
-          const lineUserId = String(ownerRecord?.lineUserId || "").trim();
-          const enabled = isMasterActive(ownerRecord?.lineNotifications || "Yes");
           return {
             contractId: contract.id,
             contractName: contract.name,
             owner: contract.owner || "Unassigned",
-            lineUserId,
+            lineUserId: "T23_Tracking Contract",
             statusCode,
             statusLabel: statusCode === "R" ? "R = Overdue" : "Y = Delayed",
             confidential: isConfidentialContract(contract),
             message: lineNotificationMessage(contract, statusCode),
-            ready: Boolean(lineUserId && enabled),
-            delivery: !ownerRecord ? "Owner not found in People Master" : !enabled ? "LINE Alert disabled" : !lineUserId ? "Missing LINE User ID" : "Ready for automatic LINE"
+            ready: true,
+            delivery: "Ready for automatic LINE group"
           };
         })
         .filter(Boolean)
