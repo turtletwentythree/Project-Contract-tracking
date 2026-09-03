@@ -229,8 +229,8 @@ DEPARTMENT_NAME_ALIASES = {
     "ADMIN": "Administration",
     "Information Technology": "IT",
     "MKT": "Marketing",
-    "Project Management": "Project Manager",
-    "PM": "Project Manager",
+    "Project Manager": "Project Management",
+    "PM": "Project Management",
 }
 
 ACTIVE_DEPARTMENT_ORDER = [
@@ -242,7 +242,7 @@ ACTIVE_DEPARTMENT_ORDER = [
     "Marketing",
     "Operation",
     "Procurement",
-    "Project Manager",
+    "Project Management",
 ]
 
 
@@ -637,6 +637,624 @@ def log_from_csv_row(row):
         else:
             values.append(value or "")
     return values
+
+
+def add_log_action_reason_feature(html):
+    """Keep Action reason drill-down in every regenerated dashboard."""
+    css = r'''
+    .log-action-detail-button {
+      border: 0;
+      border-bottom: 1px solid currentColor;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 750;
+      line-height: 1.35;
+      padding: 1px 0;
+      text-align: left;
+    }
+    .log-action-detail-button:hover,
+    .log-action-detail-button:focus-visible { color: var(--t23-orange); }
+    #logActionReasonModal { z-index: 40; }
+    .log-action-reason-modal { width: min(680px, 100%); }
+    .log-action-reason-grid { display: grid; gap: 8px; }
+    .log-action-reason-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 34%) minmax(0, 1fr);
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .log-action-reason-row:last-child { border-bottom: 0; }
+    .log-action-reason-label,
+    .log-action-reason-value { min-width: 0; overflow-wrap: anywhere; }
+    .log-action-reason-label span,
+    .log-action-reason-value span { display: block; }
+    .log-action-reason-label span:last-child,
+    .log-action-reason-value span:last-child {
+      color: var(--muted);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    @media (max-width: 720px) {
+      .log-action-reason-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+
+'''
+    if ".log-action-detail-button" not in html:
+        html = html.replace("    .log-meta-empty {", css + "    .log-meta-empty {", 1)
+
+    modal = r'''
+  <div class="modal-backdrop" id="logActionReasonModal" aria-hidden="true">
+    <section class="modal log-action-reason-modal" role="dialog" aria-modal="true" aria-labelledby="logActionReasonTitle">
+      <header class="modal-header">
+        <div>
+          <h2 id="logActionReasonTitle">Action Reason</h2>
+          <p id="logActionReasonSubtitle">เหตุผลของสถานะ</p>
+        </div>
+        <button class="icon-button" id="closeLogActionReasonModal" title="Close" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body" id="logActionReasonBody"></div>
+    </section>
+  </div>
+
+'''
+    if 'id="logActionReasonModal"' not in html:
+        html = html.replace('  <div class="modal-backdrop" id="statusEmailModal"', modal + '  <div class="modal-backdrop" id="statusEmailModal"', 1)
+
+    functions = r'''    function renderLogActionButton(row) {
+      const action = String(row?.[12] || row?.[25] || "-").trim() || "-";
+      return `<button class="log-action-detail-button" type="button" data-log-action-detail data-contract-id="${escapeHtml(row?.[0] || "")}" data-log-no="${escapeHtml(row?.[1] || "")}" title="View reason / ดูเหตุผล">${escapeHtml(action)}</button>`;
+    }
+
+    function closeLogActionReasonDetail() {
+      const modal = document.querySelector("#logActionReasonModal");
+      if (!modal) return;
+      modal.classList.remove("show");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    function openLogActionReasonDetail(row) {
+      const modal = document.querySelector("#logActionReasonModal");
+      const subtitle = document.querySelector("#logActionReasonSubtitle");
+      const body = document.querySelector("#logActionReasonBody");
+      if (!modal || !subtitle || !body || !row) return;
+      const actionEn = row[25] || row[12] || "-";
+      const actionTh = row[24] || "-";
+      const currentContract = contracts.find(item => item.id === row[0]);
+      const detailRows = [
+        ["Action", "การดำเนินการ", actionEn, actionTh],
+        ["Alert", "การแจ้งเตือน", row[10] || "-", ""],
+        ["Status Update", "สถานะปัจจุบัน", currentContract?.status || currentContract?.alert || row[10] || "-", ""],
+        ["Description", "คำอธิบาย", row[27] || "", row[26] || ""],
+        ["Reason Type", "ประเภทเหตุผล", row[30] || row[16] || "", row[29] || ""],
+        ["Reason", "เหตุผล", row[17] || row[13] || row[11] || "", ""],
+        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],
+        ["Approval", "การอนุมัติ", logApprovalText(row) === "-" ? "" : logApprovalText(row), ""],
+        ["Corrective Action", "การแก้ไข", row[20] || row[15] || "", ""],
+        ["SLA", "ระยะเวลาดำเนินการ", row[28] || row[8] || "-", ""],
+        ["Updated By", "ผู้บันทึก", row[21] || "", row[22] ? formatDateTime(row[22]) : ""]
+      ].filter(([, , primary, secondary]) => String(primary || "").trim() || String(secondary || "").trim());
+      subtitle.textContent = `${row[0]} · Log ${row[1]} · Cycle ${row[2]}`;
+      body.innerHTML = `<div class="detail-section"><div class="log-action-reason-grid">${detailRows.length ? detailRows.map(([labelEn, labelTh, valueEn, valueTh]) => `
+        <div class="log-action-reason-row">
+          <div class="log-action-reason-label"><strong>${escapeHtml(labelEn)}</strong><span>${escapeHtml(labelTh)}</span></div>
+          <div class="log-action-reason-value"><strong>${escapeHtml(valueEn || "-")}</strong>${valueTh ? `<span>${escapeHtml(valueTh)}</span>` : ""}</div>
+        </div>`).join("") : `<p class="muted">No reason recorded.<br>ไม่มีการบันทึกเหตุผล</p>`}</div></div>`;
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+'''
+    if "function renderLogActionButton(row)" not in html:
+        html = html.replace("    function formatDateTime(value) {", functions + "    function formatDateTime(value) {", 1)
+
+    html = html.replace('<td>${escapeHtml(row[12] || "-")}</td>', '<td>${renderLogActionButton(row)}</td>')
+    html = html.replace('row.addEventListener("click", () => {\n          const logRow = logRecords.find', 'row.addEventListener("click", event => {\n          if (event.target.closest("button, a")) return;\n          const logRow = logRecords.find', 1)
+
+    delegation = r'''        const actionDetailButton = event.target.closest("[data-log-action-detail]");
+        if (actionDetailButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          const row = logRecords.find(item => item[0] === actionDetailButton.dataset.contractId && String(item[1]) === String(actionDetailButton.dataset.logNo));
+          if (row) openLogActionReasonDetail(row);
+          return;
+        }
+'''
+    if "const actionDetailButton = event.target.closest" not in html:
+        html = html.replace('      document.addEventListener("click", event => {\n        const removeAttachment', '      document.addEventListener("click", event => {\n' + delegation + '        const removeAttachment', 1)
+
+    listeners = r'''    document.querySelector("#closeLogActionReasonModal").addEventListener("click", closeLogActionReasonDetail);
+    document.querySelector("#logActionReasonModal").addEventListener("click", event => {
+      if (event.target.id === "logActionReasonModal") closeLogActionReasonDetail();
+    });
+'''
+    if 'querySelector("#closeLogActionReasonModal")' not in html:
+        html = html.replace('    document.addEventListener("keydown", event => {', listeners + '    document.addEventListener("keydown", event => {', 1)
+        html = html.replace('      if (event.key === "Escape") {\n        closeStationOwnerDetail();', '      if (event.key === "Escape") {\n        closeLogActionReasonDetail();\n        closeStationOwnerDetail();', 1)
+    return html
+
+
+def apply_sla_dashboard_rules(html):
+    """Keep Alert and Status Update calculations separate in generated output."""
+    html = html.replace("sorted high to low by Delayed + Overdue", "sorted high to low by Delayed + At Risk")
+    alert_function = r'''    function calculateAlert(action, daysOnHand, sla) {
+      const numericSla = Number(sla) || 0;
+      const currentDays = Number(daysOnHand) || 0;
+      if (isCancelledStatus(action)) return "Black >>B=Cancelled";
+      if (isCompletedStatus(action)) return "Black >>B=Completed";
+      // Start the yellow warning one working day before the Action SLA.
+      if (currentDays < Math.max(0, numericSla - 1)) {
+        return "Green >>G=On Track";
+      }
+      if (currentDays <= numericSla) {
+        return "Yellow >>Y=Delayed";
+      }
+      return "Red >>R=At Risk";
+    }'''
+    html = re.sub(
+        r'    function calculateAlert\(action, daysOnHand, sla\) \{.*?\n    \}',
+        lambda _: alert_function,
+        html,
+        count=1,
+        flags=re.S,
+    )
+
+    contract_status_function = r'''    function calculateContractStatus(stage, totalSpendingDays, totalSla) {
+      const numericSla = Number(totalSla) || 0;
+      const totalDays = Number(totalSpendingDays) || 0;
+      if (isCancelledStatus(stage)) return "Black >>B=Cancelled";
+      if (isCompletedStatus(stage)) return "Black >>B=Completed";
+      if (totalDays < numericSla) return "Green >>G=On Track";
+      // Keep the contract yellow until five working days beyond Total SLA.
+      if (totalDays < numericSla + 5) return "Yellow >>Y=Delayed";
+      return "Red >>R=Overdue";
+    }'''
+    html = re.sub(
+        r'    function calculateContractStatus\(stage, totalSpendingDays, totalSla\) \{.*?\n    \}',
+        lambda _: contract_status_function,
+        html,
+        count=1,
+        flags=re.S,
+    )
+
+    close_helpers = r'''    function isCancelledStatus(value) {
+      return /\bcancelled\b/i.test(String(value || "").trim());
+    }
+
+    function isCompletedStatus(value) {
+      const text = String(value || "").trim();
+      return /\bcompleted\b/i.test(text) || /^signed$/i.test(text);
+    }
+
+    function isClosedAction(action) {
+      return isCancelledStatus(action) || isCompletedStatus(action);
+    }'''
+    html, close_helper_count = re.subn(
+        r'    function isCancelledStatus\(value\) \{.*?\n    \}\n\n    function isCompletedStatus\(value\) \{.*?\n    \}\n\n    function isClosedAction\(action\) \{.*?\n    \}',
+        lambda _: close_helpers,
+        html,
+        count=1,
+        flags=re.S,
+    )
+    if not close_helper_count:
+        html = re.sub(
+            r'    function isClosedAction\(action\) \{.*?\n    \}',
+            lambda _: close_helpers,
+            html,
+            count=1,
+            flags=re.S,
+        )
+    html = re.sub(
+        r'    function closedStatusLabel\(value\) \{.*?\n    \}',
+        '    function closedStatusLabel(value) {\n      return isCancelledStatus(value) ? "B=Cancelled" : "B=Completed";\n    }',
+        html,
+        count=1,
+        flags=re.S,
+    )
+
+    grouped_chart_function = r'''    function groupedAlertBarRows(labels, countFn, options = {}) {
+      const yellowLabel = options.yellowLabel || "Delayed";
+      const redLabel = options.redLabel || "At Risk";
+      const rows = labels.map(item => {
+        const yellowCount = countFn(item.value, "Y");
+        const redCount = countFn(item.value, "R");
+        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount };
+      }).filter(row => row.total > 0)
+        .sort((a, b) => b.priorityTotal - a.priorityTotal || b.redCount - a.redCount || b.yellowCount - a.yellowCount || a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
+      if (!rows.length) return `<div class="empty-state">No Alert records</div>`;
+      const maxTotal = Math.max(1, ...rows.map(row => row.total));
+      return `
+        <div class="horizontal-status-chart">
+          ${rows.map(row => {
+            const totalWidth = Math.max(4, (row.total / maxTotal) * 100);
+            const yellowWidth = row.total ? (row.yellowCount / row.total) * 100 : 0;
+            const redWidth = row.total ? (row.redCount / row.total) * 100 : 0;
+            return `
+              <div class="horizontal-status-row" title="${escapeHtml(row.label)}: ${escapeHtml(yellowLabel)} ${row.yellowCount}, ${escapeHtml(redLabel)} ${row.redCount}">
+                <div class="horizontal-status-label">${escapeHtml(row.label)}</div>
+                <div class="horizontal-status-track"><div class="horizontal-status-stack" style="width:${totalWidth}%">
+                  ${row.yellowCount > 0 ? `<div class="horizontal-status-segment delayed" style="width:${yellowWidth}%" aria-label="${escapeHtml(yellowLabel)} ${row.yellowCount}">${row.yellowCount}</div>` : ""}
+                  ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
+                </div></div>
+                <div class="horizontal-status-total">${row.total}</div>
+              </div>`;
+          }).join("")}
+        </div>
+        <div class="horizontal-status-legend">
+          <span><span class="legend-swatch delayed"></span>Y = ${escapeHtml(yellowLabel)}</span>
+          <span><span class="legend-swatch overdue"></span>R = ${escapeHtml(redLabel)}</span>
+        </div>`;
+    }'''
+    html = re.sub(
+        r'    function groupedAlertBarRows\(labels, countFn, options = \{\}\) \{.*?\n    \}\n\n    function orderedUniqueList',
+        lambda _: grouped_chart_function + '\n\n    function orderedUniqueList',
+        html,
+        count=1,
+        flags=re.S,
+    )
+
+    if '.horizontal-status-segment.on-track' not in html:
+        html = html.replace(
+            '    .horizontal-status-segment.delayed {\n      background: var(--amber);\n    }',
+            '    .horizontal-status-segment.delayed {\n      background: var(--amber);\n    }\n\n    .horizontal-status-segment.on-track {\n      background: var(--green);\n    }',
+            1,
+        )
+    if '.legend-swatch.on-track' not in html:
+        html = html.replace(
+            '    .legend-swatch.delayed {\n      background: var(--amber);\n    }',
+            '    .legend-swatch.delayed {\n      background: var(--amber);\n    }\n\n    .legend-swatch.on-track {\n      background: var(--green);\n    }',
+            1,
+        )
+
+    html = html.replace('        alertCode: alertCodeFor(item.status),', '        statusCode: alertCodeFor(item.status),\n        alertCode: alertCodeFor(item.alert),', 1)
+    html = html.replace('        pendingDays: closed ? 0 : item.used', '        pendingDays: closed ? 0 : item.days', 1)
+    if 'const daysFromAddCase = addCaseDate ?' not in html:
+        html = html.replace(
+            '      const closeDate = latestCloseDate(item.id);\n      const record = {',
+            '      const closeDate = latestCloseDate(item.id);\n      const addCaseDate = addCaseStartDateForContract(item);\n      const daysFromAddCase = accumulatedContractDays(item);\n      const record = {',
+            1,
+        )
+    html = html.replace('        pendingDays: closed ? 0 : item.days', '        pendingDays: closed ? 0 : daysFromAddCase', 1)
+    html = html.replace('        isCompletedLast30Days: item.stage === "Signed / Completed" && isWithinLast30Days(closeDate) ? 1 : 0,', '        isCompletedLast30Days: isCompletedStatus(item.stage) && isWithinLast30Days(closeDate) ? 1 : 0,', 1)
+    html = html.replace('        isCancelled: item.stage === "Cancelled" ? 1 : 0,', '        isCancelled: isCancelledStatus(item.stage) ? 1 : 0,', 1)
+    html = html.replace('.filter(item => item.isPending === 1 && item.alertCode === "R")', '.filter(item => item.isPending === 1 && item.isOverdue === 1)', 1)
+    html = html.replace('pendingDays: Number(item.pendingDays) || Number(contract.used) || 0', 'pendingDays: Number(item.pendingDays) || Number(contract.days) || 0', 1)
+    html = html.replace('pendingDays: Number(item.pendingDays) || Number(contract.days) || 0', 'pendingDays: Number(item.pendingDays) || 0', 1)
+    html = html.replace('<th class="compact-days-col">Days</th>', '<th class="compact-days-col">Days from Add Case</th>', 1)
+    html = html.replace('<th class="compact-days-col">Days from Add Case</th>', '<th class="compact-days-col">Day</th>', 1)
+    html = html.replace('          if (item.alertCode === "Y") current.delayed += 1;', '          if (item.statusCode === "Y") current.delayed += 1;', 1)
+    html = html.replace('          if (item.alertCode === "R") current.overdue += 1;', '          if (item.statusCode === "R") current.overdue += 1;', 1)
+    html = html.replace('          const current = map.get(key) || { label: key, delayed: 0, overdue: 0 };', '          const current = map.get(key) || { label: key, onTrack: 0, delayed: 0, overdue: 0 };\n          if (item.statusCode === "G") current.onTrack += 1;', 1)
+    html = html.replace('          .filter(item => item.delayed > 0 || item.overdue > 0)', '          .filter(item => item.onTrack > 0 || item.delayed > 0 || item.overdue > 0)', 1)
+    html = html.replace('|| b.delayed - a.delayed || a.label.localeCompare(b.label));', '|| b.delayed - a.delayed || b.onTrack - a.onTrack || a.label.localeCompare(b.label));', 1)
+    html = html.replace('        return alertCode === "Y" ? row.delayed : alertCode === "R" ? row.overdue : 0;', '        return alertCode === "G" ? row.onTrack : alertCode === "Y" ? row.delayed : alertCode === "R" ? row.overdue : 0;', 1)
+    html = html.replace('{ yellowLabel: "Delayed", redLabel: "At Risk" }', '{ yellowLabel: "Delayed", redLabel: "Overdue" }')
+    html = html.replace(
+        '      contract.alert = latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla);',
+        '      contract.alert = isClosedAction(contract.stage)\n        ? calculateAlert(contract.stage, contract.days, latest?.[8] || totalSla)\n        : (latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla));',
+        1,
+    )
+
+    if 'Recalculate open Action and Contract SLA values from today' not in html:
+        html = html.replace(
+            '    function renderAll() {\n      rebuildNotificationQueue();',
+            '    function renderAll() {\n      // Recalculate open Action and Contract SLA values from today\'s date before rendering.\n      contracts.forEach(syncContractTimingFromLogs);\n      refreshDashboardDataFromContracts();\n      rebuildNotificationQueue();',
+            1,
+        )
+    if 'lastSlaCalculationDate' not in html:
+        html = html.replace(
+            '    initializeLoginGateway();\n    checkEmailEndpointHealth();',
+            '    initializeLoginGateway();\n    checkEmailEndpointHealth();\n\n    let lastSlaCalculationDate = todayInputValue();\n    window.setInterval(() => {\n      const currentCalculationDate = todayInputValue();\n      if (currentCalculationDate === lastSlaCalculationDate) return;\n      lastSlaCalculationDate = currentCalculationDate;\n      if (currentUser) renderAll();\n    }, 60000);',
+            1,
+        )
+    return html
+
+
+def add_dashboard_contract_links_and_due_request_sync(html):
+    """Link dashboard contract details and persist pending Due Date requests in Drive CSV."""
+    if '.compact-contract-link {' not in html:
+        html = html.replace(
+            '''    .compact-contract-head > strong {
+      color: var(--t23-black);
+      font-size: 10px;
+      font-weight: 950;
+    }''',
+            '''    .compact-contract-link {
+      appearance: none;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--t23-black);
+      font-size: 10px;
+      font-weight: 950;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+
+    .compact-contract-link:hover,
+    .compact-contract-link:focus-visible {
+      color: var(--green-dark);
+    }''',
+            1,
+        )
+
+    if 'function showContractStatusDetail(contractId)' not in html:
+        html = html.replace(
+            '''      showToast(`Log View: ${selectedLogContractId}`);
+    }
+''',
+            '''      showToast(`Log View: ${selectedLogContractId}`);
+    }
+
+    function showContractStatusDetail(contractId) {
+      const contract = contracts.find(item => item.id === contractId);
+      if (!contract || !contractsVisibleToCurrentUser().some(item => item.id === contractId)) {
+        showToast("Contract not available for your access level.");
+        return false;
+      }
+      selectedContractIndex = contracts.findIndex(item => item.id === contractId);
+      setView(isConfidentialContract(contract) ? "confidential" : "contracts");
+      const contractIdFilter = document.querySelector("#contractIdFilter");
+      if (contractIdFilter && [...contractIdFilter.options].some(option => option.value === contractId)) {
+        contractIdFilter.value = contractId;
+        renderContractsTable();
+      }
+      document.querySelector("#contractRows")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      showToast(`Contract Details: ${contractId}`);
+      return true;
+    }
+''',
+            1,
+        )
+
+    html = html.replace(
+        '<strong>${escapeHtml(row.id)}</strong>',
+        '<button class="compact-contract-link" type="button" data-dashboard-contract-id="${escapeHtml(row.id)}" title="Open ${escapeHtml(row.id)} in Contracts">${escapeHtml(row.id)}</button>',
+        1,
+    )
+    if 'button.addEventListener("click", () => showContractStatusDetail' not in html:
+        html = html.replace(
+            '''        <div class="compact-panel-foot"><span class="badge red">R = Overdue</span> ${longestPendingOnHand.length} Contracts</div>` : `<div class="empty-state">No R = Overdue contracts</div>`;
+''',
+            '''        <div class="compact-panel-foot"><span class="badge red">R = Overdue</span> ${longestPendingOnHand.length} Contracts</div>` : `<div class="empty-state">No R = Overdue contracts</div>`;
+      document.querySelectorAll("[data-dashboard-contract-id]").forEach(button => {
+        button.addEventListener("click", () => showContractStatusDetail(button.dataset.dashboardContractId));
+      });
+''',
+            1,
+        )
+
+    if '"Pending Due Date Request"' not in html[html.index('const contractDatabaseHeaders'):html.index('const logDatabaseHeaders')]:
+        html = html.replace(
+            '''      "Visibility",
+      "Category"
+    ];''',
+            '''      "Visibility",
+      "Category",
+      "Pending Due Date Request"
+    ];''',
+            1,
+        )
+    if 'function dueDateRequestForStorage(request)' not in html:
+        html = html.replace(
+            '''        "Visibility": item.visibility || "",
+        "Category": item.category || contractTypeCategoryFor(item.type)
+      };
+    }
+
+    function contractFromDbRow(row) {''',
+            '''        "Visibility": item.visibility || "",
+        "Category": item.category || contractTypeCategoryFor(item.type),
+        "Pending Due Date Request": dueDateRequestForStorage(item.pendingDueDateRequest)
+      };
+    }
+
+    function dueDateRequestForStorage(request) {
+      if (!request || typeof request !== "object") return "";
+      return {
+        ...request,
+        attachments: (request.attachments || []).map(({ base64, ...attachment }) => attachment)
+      };
+    }
+
+    function parsePendingDueDateRequest(value) {
+      if (!value) return null;
+      try {
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
+        return parsed && typeof parsed === "object" && parsed.requestId ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function contractFromDbRow(row) {''',
+            1,
+        )
+        html = html.replace(
+            '''      const accessLevel = String(row["Access Level"] || accessLevelForContractType(type) || "Normal").trim();
+      return {''',
+            '''      const accessLevel = String(row["Access Level"] || accessLevelForContractType(type) || "Normal").trim();
+      const pendingDueDateRequest = parsePendingDueDateRequest(row["Pending Due Date Request"]);
+      return {''',
+            1,
+        )
+        html = html.replace(
+            '''        visibility: String(row["Visibility"] || (accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป")).trim(),
+        category: String(row["Category"] || contractTypeCategoryFor(type)).trim()
+      };
+    }
+
+    function logDbRow(row) {''',
+            '''        visibility: String(row["Visibility"] || (accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป")).trim(),
+        category: String(row["Category"] || contractTypeCategoryFor(type)).trim(),
+        pendingDueDateRequest
+      };
+    }
+
+    function refreshDueDateRequestsFromContracts(sourceContracts = contracts) {
+      const requestsById = new Map(
+        dueDateAdjustmentRequests
+          .filter(request => !String(request.status || "").startsWith("Pending"))
+          .map(request => [request.requestId, request])
+      );
+      sourceContracts.forEach(contract => {
+        const request = contract.pendingDueDateRequest;
+        if (request?.requestId) requestsById.set(request.requestId, { ...request, contractId: request.contractId || contract.id });
+      });
+      dueDateAdjustmentRequests.splice(0, dueDateAdjustmentRequests.length, ...requestsById.values());
+    }
+
+    function logDbRow(row) {''',
+            1,
+        )
+
+    if 'const cloudSupportsPendingDueRequests =' not in html:
+        html = html.replace(
+            '''      if (!contractText) return false;
+      const cloudContracts = csvToObjects(contractText).map(contractFromDbRow).filter(item => item.id && item.name);
+      cloudContracts.forEach(item => { item.department = canonicalDepartmentName(item.department); });''',
+            '''      if (!contractText) return false;
+      const cloudSupportsPendingDueRequests = (parseCsvRows(contractText)[0] || []).includes("Pending Due Date Request");
+      const cloudContracts = csvToObjects(contractText).map(contractFromDbRow).filter(item => item.id && item.name);
+      cloudContracts.forEach(item => { item.department = canonicalDepartmentName(item.department); });
+      let migratedPendingDueRequestCount = 0;
+      if (!cloudSupportsPendingDueRequests) {
+        const localPendingRequests = new Map(
+          dueDateAdjustmentRequests
+            .filter(request => String(request.status || "").startsWith("Pending"))
+            .map(request => [request.contractId, request])
+        );
+        cloudContracts.forEach(contract => {
+          const pendingRequest = localPendingRequests.get(contract.id);
+          if (!pendingRequest) return;
+          contract.pendingDueDateRequest = { ...pendingRequest };
+          migratedPendingDueRequestCount += 1;
+        });
+      }''',
+            1,
+        )
+        html = html.replace(
+            '''      contracts.splice(0, contracts.length, ...cloudContracts);
+      logRecords.splice(0, logRecords.length, ...cloudLogs);''',
+            '''      contracts.splice(0, contracts.length, ...cloudContracts);
+      logRecords.splice(0, logRecords.length, ...cloudLogs);
+\t      refreshDueDateRequestsFromContracts(cloudContracts);''',
+            1,
+        )
+        html = html.replace(
+            '''\t        contracts,
+\t        logRecords,
+\t        masterData''',
+            '''\t        contracts,
+\t        logRecords,
+\t        dueDateAdjustmentRequests,
+\t        masterData''',
+            1,
+        )
+        html = html.replace(
+            'if (migratedSlaCount || migratedDepartmentCount || migratedActionCount) scheduleDriveDatabaseSave();',
+            'if (migratedSlaCount || migratedDepartmentCount || migratedActionCount || migratedPendingDueRequestCount) scheduleDriveDatabaseSave();',
+            1,
+        )
+        html = html.replace(
+            '${migratedActionCount ? ` · Action SLA updated` : ""}`);',
+            '${migratedActionCount ? ` · Action SLA updated` : ""}${migratedPendingDueRequestCount ? ` · ${migratedPendingDueRequestCount} Due Date request migrated` : ""}`);',
+            1,
+        )
+
+    if 'function recoverPendingDueDateRequestsFromLogs(' not in html:
+        html = html.replace(
+            '''    function logDbRow(row) {''',
+            '''    function recoverPendingDueDateRequestsFromLogs(sourceContracts = contracts, sourceLogs = logRecords) {
+      const contractsById = new Map(sourceContracts.map(contract => [contract.id, contract]));
+      const existingPendingContracts = new Set(
+        dueDateAdjustmentRequests
+          .filter(request => String(request.status || "").startsWith("Pending"))
+          .map(request => request.contractId)
+      );
+      sourceContracts.forEach(contract => {
+        if (contract.pendingDueDateRequest?.requestId) existingPendingContracts.add(contract.id);
+      });
+      const latestDecisionIndex = new Map();
+      sourceLogs.forEach((row, index) => {
+        if (["Due Date Approved and Applied", "Due Date Request Rejected", "Due Date More Information Requested"].includes(String(row?.[12] || ""))) {
+          latestDecisionIndex.set(String(row?.[0] || ""), index);
+        }
+      });
+      let recovered = 0;
+      for (let index = sourceLogs.length - 1; index >= 0; index -= 1) {
+        const row = sourceLogs[index];
+        const contractId = String(row?.[0] || "").trim();
+        if (String(row?.[12] || "") !== "Due Date Adjustment Requested"
+          || existingPendingContracts.has(contractId)
+          || index <= (latestDecisionIndex.get(contractId) ?? -1)) continue;
+        const contract = contractsById.get(contractId);
+        if (!contract) continue;
+        const detail = String(row?.[11] || "");
+        const match = detail.match(/Requested Due Date\\s+(\\d{4}-\\d{2}-\\d{2})\\s*:\\s*(.*)/i);
+        const requestedDue = match?.[1] || "";
+        if (!requestedDue) continue;
+        const logKey = String(row?.[1] || index + 1).replace(/[^A-Za-z0-9]+/g, "");
+        const request = {
+          requestId: `DDR-REC-${contractId.replace(/[^A-Za-z0-9]+/g, "")}-${logKey}`,
+          contractId,
+          systemDue: contract.systemDue || "",
+          currentDue: contract.due || "",
+          requestedDue,
+          requestType: "Extension",
+          reason: match?.[2]?.trim() || detail || "Recovered from Due Date request log",
+          attachments: [],
+          requestedBy: String(row?.[4] || contract.owner || "User"),
+          requestedByEmail: emailForPerson(row?.[4]) || emailForPerson(contract.owner) || "",
+          approver: "System Administrator",
+          approverEmail: "admin@turtle23.com",
+          requestedAt: String(row?.[6] || ""),
+          currentBalance: Number(contract.balance || 0),
+          currentAlert: contract.alert || contract.status || "",
+          status: "Pending Admin Review",
+          recoveredFromLog: true
+        };
+        contract.pendingDueDateRequest = request;
+        existingPendingContracts.add(contractId);
+        recovered += 1;
+      }
+      return recovered;
+    }
+
+    function logDbRow(row) {''',
+            1,
+        )
+        html = html.replace(
+            '''\t      refreshDueDateRequestsFromContracts(cloudContracts);''',
+            '''\t      if (!cloudSupportsPendingDueRequests) {
+\t        migratedPendingDueRequestCount += recoverPendingDueDateRequestsFromLogs(cloudContracts, cloudLogs);
+\t      }
+\t      refreshDueDateRequestsFromContracts(cloudContracts);''',
+            1,
+        )
+
+    if 'refreshDueDateRequestsFromContracts(contracts);\n      const queue = document.querySelector("#dueApprovalQueueRows");' not in html:
+        html = html.replace(
+            '''      const queue = document.querySelector("#dueApprovalQueueRows");''',
+            '''      refreshDueDateRequestsFromContracts(contracts);
+      const queue = document.querySelector("#dueApprovalQueueRows");''',
+            1,
+        )
+
+    html = html.replace(
+        '''      const draft = buildDueApprovalEmailDraft(request, contract);
+      saveContractsDatabase();
+      renderAll();''',
+        '''      const draft = buildDueApprovalEmailDraft(request, contract);
+      saveContractsDatabase({ syncCloud: false });
+      await saveDriveDatabaseToCloud();
+      renderAll();''',
+        1,
+    )
+    return html
 
 
 def main():
@@ -2258,19 +2876,6 @@ def main():
       height: 30px;
     }
 
-    .master-log-row.cycle-start > td {
-      border-top: 3px solid #1f6f8b;
-    }
-
-    .master-log-cycle-label {
-      display: block;
-      margin-bottom: 6px;
-      color: #13576f;
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
     @media (max-width: 1040px) {
       .master-data-grid {
         grid-template-columns: 1fr;
@@ -3099,16 +3704,16 @@ def main():
     )
     html = html.replace(
         """        <button class="nav-button" data-view="user" title="User Case Action">
-          <span>✎</span><span class="nav-label">User Case Action</span><span class="nav-count">3</span>
+          <span>✎</span><span class="nav-label">User Case Action</span>
         </button>""",
         """        <button class="nav-button confidential-nav" data-view="confidential" title="Confidential Contracts" data-confidential-nav>
           <span>◆</span><span class="nav-label">Confidential</span><span class="nav-count">0</span>
         </button>
         <button class="nav-button" data-view="user" title="User Case Action">
-          <span>✎</span><span class="nav-label">User Case Action</span><span class="nav-count">3</span>
+          <span>✎</span><span class="nav-label">User Case Action</span>
         </button>
         <button class="nav-button" data-view="master" title="Master Data">
-          <span>▤</span><span class="nav-label">Master Data</span><span class="nav-count">5</span>
+          <span>▤</span><span class="nav-label">Master Data</span>
         </button>""",
     )
     html = html.replace(
@@ -3166,18 +3771,17 @@ def main():
               <section class="panel master-data-panel master-data-panel-full">
                 <div class="panel-header">
                   <div>
-                    <h2>Log View</h2>
-                    <small>One editable row per Log No, grouped by Contract ID and Cycle.</small>
+                    <h2>Log Records</h2>
+                    <small>Edit or delete incorrect created from Log View Detail.</small>
                   </div>
                   <div class="master-data-actions">
                     <button class="secondary-button" type="button" data-master-import="logs">Import</button>
                     <button class="secondary-button" type="button" data-master-export="logs">Export</button>
-                    <button class="secondary-button" type="button" data-add-master-row="logs">Add Row</button>
                   </div>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>Log View</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Delay Reason</th><th>Action</th><th>Action Summary</th><th>Handoff Check</th><th>Final Action</th><th>Action Reason Type</th><th>Action Reason Detail</th><th>Approval Type</th><th>Approval Conditions</th><th>Corrective Action Detail</th><th>Updated By</th><th>Updated Date and Time</th><th>Action Code</th><th>Action Name TH</th><th>Action Name EN</th><th>Action Description TH</th><th>Action Description EN</th><th>Action SLA</th><th>Action Reason Type TH</th><th>Action Reason Type EN</th><th>Attachments JSON</th><th>CC Recipients JSON</th><th></th></tr></thead>
+                    <thead><tr><th>Contract ID</th><th>Log No</th><th>Cycle</th><th>From</th><th>To</th><th>In</th><th>Out</th><th>SLA</th><th>Days on Hand</th><th>Alert</th><th>Action</th><th></th></tr></thead>
                     <tbody id="masterLogRows"></tbody>
                   </table>
                 </div>
@@ -4589,6 +5193,89 @@ def main():
       return attachment;
     }
 
+    function waitForEmailRequestStatus(endpoint, requestId, timeoutMs = 120000) {
+      return new Promise((resolve, reject) => {
+        const startedAt = Date.now();
+        const poll = () => {
+          const callbackName = `t23EmailStatus_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          const script = document.createElement("script");
+          let finished = false;
+          const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(loadTimer);
+            delete window[callbackName];
+            script.remove();
+          };
+          const retry = () => {
+            cleanup();
+            if (Date.now() - startedAt >= timeoutMs) {
+              reject(new Error("Email confirmation timed out. Check Apps Script Executions before sending again. / ไม่ได้รับผลยืนยันการส่งอีเมล กรุณาตรวจสอบ Apps Script ก่อนส่งซ้ำ"));
+              return;
+            }
+            window.setTimeout(poll, 1000);
+          };
+          const loadTimer = window.setTimeout(retry, 12000);
+          window[callbackName] = payload => {
+            const state = String(payload?.state || "pending");
+            cleanup();
+            if (state === "sent" && payload?.success) {
+              resolve(payload);
+              return;
+            }
+            if (state === "failed" || payload?.success === false) {
+              reject(new Error(payload?.error || "Send email failed. / ส่งอีเมลไม่สำเร็จ"));
+              return;
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+              reject(new Error("Email confirmation timed out. Check Apps Script Executions before sending again. / ไม่ได้รับผลยืนยันการส่งอีเมล กรุณาตรวจสอบ Apps Script ก่อนส่งซ้ำ"));
+              return;
+            }
+            window.setTimeout(poll, 1000);
+          };
+          script.onerror = retry;
+          const params = new URLSearchParams({
+            mode: "emailRequestStatus",
+            requestId,
+            callback: callbackName,
+            cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
+          });
+          script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+          document.head.appendChild(script);
+        };
+        poll();
+      });
+    }
+
+    function checkEmailEndpointHealth() {
+      const endpoint = configuredAttachmentUploadEndpoint();
+      if (!endpoint) return Promise.resolve({ success: false, state: "not-configured" });
+      return new Promise(resolve => {
+        const callbackName = `t23EmailHealth_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const script = document.createElement("script");
+        let finished = false;
+        const finish = payload => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          delete window[callbackName];
+          script.remove();
+          window.__t23EmailHealth = payload;
+          resolve(payload);
+        };
+        const timer = window.setTimeout(() => finish({ success: false, state: "timeout" }), 15000);
+        window[callbackName] = payload => finish(payload || { success: false, state: "invalid-response" });
+        script.onerror = () => finish({ success: false, state: "network-error" });
+        const params = new URLSearchParams({
+          mode: "healthCheck",
+          callback: callbackName,
+          cacheBust: `${Date.now()}_${Math.random().toString(36).slice(2)}`
+        });
+        script.src = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+        document.head.appendChild(script);
+      });
+    }
+
     async function sendStatusEmailViaEndpoint(draft) {
       const endpoint = ensureAttachmentUploadEndpoint();
       if (!endpoint) {
@@ -4598,6 +5285,8 @@ def main():
         item.status = "Sending email";
       });
       renderUpdateAttachmentQueue();
+      const requestId = `EMAIL-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const attachments = await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload));
       const response = await fetch(endpoint, {
         method: "POST",
         mode: "no-cors",
@@ -4605,6 +5294,7 @@ def main():
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           mode: "sendStatusEmail",
+          requestId,
           folderId: attachmentCloudConfig.folderId,
           folderUrl: attachmentCloudConfig.folderUrl,
           to: draft.to,
@@ -4612,28 +5302,16 @@ def main():
           ...(draft.cc ? { ccText: draft.cc } : {}),
           subject: draft.subject,
           body: draft.body,
-          attachments: await Promise.all((draft.attachments || []).map(buildEmailAttachmentPayload)),
+          attachments,
           contractId: draft.contractId || "",
           action: draft.action || "",
           sentFrom: "T23 Contract Tracking"
         })
       });
-      if (response.type === "opaque") {
-        updateAttachmentQueue.forEach(item => {
-          item.status = "Email sent";
-        });
-        renderUpdateAttachmentQueue();
-        return {
-          success: true,
-          sent: true,
-          files: (draft.attachments || []).map(item => ({
-            fileName: item.fileName,
-            originalFileName: item.originalFileName
-          }))
-        };
-      }
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) throw new Error(result.error || "Send email failed");
+      const result = response.type === "opaque"
+        ? await waitForEmailRequestStatus(endpoint, requestId)
+        : await response.json().catch(() => ({}));
+      if ((response.type !== "opaque" && !response.ok) || !result.success) throw new Error(result.error || "Send email failed");
       (result.files || []).forEach(file => {
         const match = updateAttachmentQueue.find(item =>
           item.fileName === file.fileName || item.originalFileName === file.originalFileName
@@ -5237,41 +5915,324 @@ def main():
       return dateToInputValue(contract.addCaseDate || firstLogFor(contract.id)?.[6] || "");
     }
 
-    function recalculateLogTiming(row) {
+    function accumulatedContractDays(contract, referenceDate = todayInputValue()) {
+      if (!contract) return 0;
+      const startDate = addCaseStartDateForContract(contract);
+      if (!startDate) return Number(contract.used || contract.days || 0) || 0;
+      if (isClosedAction(contract.stage)) {
+        const closeDate = latestCloseDate(contract.id);
+        return closeDate ? calculateDaysOnHand(startDate, closeDate) : Number(contract.used || contract.days || 0) || 0;
+      }
+      return calculateDaysOnHand(startDate, referenceDate);
+    }
+
+    function configuredTotalSlaForContract(contract) {
+      if (!contract) return 0;
+      const classification = contract.category || (contract.accessLevel === "Confidential" ? "Confidential" : "Day-to-day Work");
+      const workTypeSla = fixedSlaFromMasterData(contract.workType, contract.name, classification);
+      if (Number(workTypeSla) > 0) return Number(workTypeSla);
+      const typeSla = fixedSlaFromMasterData(contract.type, contract.name, classification);
+      if (Number(typeSla) > 0) return Number(typeSla);
+      return Number(contract.totalSla || totalSlaFor(contract.type || contract.workType, contract.name, classification) || 0) || 0;
+    }
+
+    function recalculateLogTiming(row, isCurrentAction = false) {
       if (!Array.isArray(row)) return row;
-      const calculatedDays = calculateDaysOnHand(row[6], row[7]);
-      const manualDays = row[33];
-      row[9] = manualDays === "" || manualDays == null ? calculatedDays : Number(manualDays);
-      const calculatedAlert = calculateAlert(row[12], row[9], row[8]);
-      row[10] = String(row[34] || "").trim() || calculatedAlert;
+      // Legacy/current rows may already have Out populated even though the case
+      // is still open. Treat that handoff date as day 0 for the active station.
+      const timingStart = isCurrentAction && row[7] ? row[7] : row[6];
+      const timingEnd = isCurrentAction ? "" : row[7];
+      row[9] = calculateDaysOnHand(timingStart, timingEnd);
+      row[10] = calculateAlert(row[12], row[9], row[8]);
       return row;
     }
 
     function syncContractTimingFromLogs(contract) {
       if (!contract) return contract;
       const rows = logRecords.filter(row => row[0] === contract.id);
-      rows.forEach(recalculateLogTiming);
+      const contractIsOpen = !isClosedAction(contract.stage);
+      rows.forEach((row, index) => recalculateLogTiming(row, contractIsOpen && index === rows.length - 1));
       const latest = rows.slice(-1)[0] || null;
-      const totalSla = Number(contract.totalSla || totalSlaFor(contract.workType || contract.type)) || 0;
-      const used = rows.reduce((sum, row) => sum + (Number(row[9]) || 0), 0);
       const startDate = addCaseStartDateForContract(contract);
       contract.addCaseDate = startDate;
+      const totalSla = configuredTotalSlaForContract(contract);
+      const used = accumulatedContractDays(contract);
       contract.totalSla = totalSla;
       contract.used = used;
       contract.days = latest ? Number(latest[9]) || 0 : used;
       contract.balance = totalSla - used;
       contract.systemDue = startDate ? addBusinessDays(startDate, totalSla) : (contract.systemDue || "");
       if (!contract.due) contract.due = contract.systemDue;
-      contract.alert = latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla);
+      contract.alert = isClosedAction(contract.stage)
+        ? calculateAlert(contract.stage, contract.days, latest?.[8] || totalSla)
+        : (latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla));
       contract.status = calculateContractStatus(contract.stage, used, totalSla);
       return contract;
     }""",
         1,
     )
     html = html.replace(
-        """        row[9] = calculateDaysOnHand(row[6], row[7]);
-        row[10] = calculateAlert(row[12], row[9], row[8]);""",
-        """        recalculateLogTiming(row);""",
+        """      const runtimeOut = todayInputValue();
+      const latest = latestLogFor(contractId);
+      const runtimeIn = formElement.elements.inDate.value || latest?.[7] || latest?.[6] || runtimeOut;
+      formElement.elements.inDate.value = runtimeIn;
+      formElement.elements.outDate.value = runtimeOut;""",
+        """      const runtimeOut = todayInputValue();
+      const latest = latestLogFor(contractId);
+      // Close the previous active interval, then start the selected Action at day 0.
+      if (latest && !latest[7]) {
+        latest[7] = runtimeOut;
+        recalculateLogTiming(latest);
+      }
+      const runtimeIn = runtimeOut;
+      formElement.elements.inDate.value = runtimeIn;
+      formElement.elements.outDate.value = "";""",
+        1,
+    )
+    html = html.replace(
+        "      const days = calculateDaysOnHand(runtimeIn, runtimeOut);",
+        "      const days = calculateDaysOnHand(runtimeIn);",
+        1,
+    )
+    html = html.replace(
+        "        outDate: runtimeOut,",
+        "        outDate: \"\",",
+        1,
+    )
+    html = html.replace(
+        """    function populateUserControls() {
+      refreshNewCaseIdPreview();""",
+        """    function syncUserCaseActionSubmitState(formOrId) {
+      const form = typeof formOrId === "string" ? document.querySelector(`#${formOrId}`) : formOrId;
+      if (!form) return;
+      const submitButton = form.querySelector('[type="submit"]');
+      if (!submitButton) return;
+      submitButton.disabled = form.dataset.submitting === "true" || !form.checkValidity();
+    }
+
+    function syncAllUserCaseActionSubmitStates() {
+      ["addCaseForm", "updateStatusForm", "closeCaseForm", "dueDateAdjustmentForm"]
+        .forEach(syncUserCaseActionSubmitState);
+    }
+
+    function beginUserCaseActionSubmit(form) {
+      if (!form || form.dataset.submitting === "true") return false;
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        syncUserCaseActionSubmitState(form);
+        return false;
+      }
+      form.dataset.submitting = "true";
+      syncUserCaseActionSubmitState(form);
+      return true;
+    }
+
+    function finishUserCaseActionSubmit(form, reset = false) {
+      if (!form) return;
+      delete form.dataset.submitting;
+      if (reset) resetUserCaseActionForm(form.id);
+      else syncUserCaseActionSubmitState(form);
+    }
+
+    function resetUserCaseActionForm(formId) {
+      const form = document.querySelector(`#${formId}`);
+      if (!form) return;
+      form.reset();
+      delete form.dataset.submitting;
+      delete form.dataset.boundContractId;
+      [...form.elements].forEach(field => field.setCustomValidity?.(""));
+
+      if (formId === "addCaseForm") {
+        setContractClassificationButtons("Day-to-day Work");
+        resetInitialDueDateOverride();
+        syncAddCaseLinkedFields("classification");
+        syncDepartmentOwnerOptions(false);
+        refreshEditableDropdown("addOwner");
+      } else {
+        if (form.elements.contractId) form.elements.contractId.value = "";
+        lastUserContractId = "";
+      }
+
+      if (formId === "updateStatusForm") {
+        resetUpdateAttachments();
+        resetUpdateCcRecipients();
+        renderUpdateActionDescription("");
+        document.querySelector("#updateContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        syncUpdateRecipientEmail(true);
+        updateSlaPreviews();
+      } else if (formId === "closeCaseForm") {
+        document.querySelector("#closeContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+      } else if (formId === "dueDateAdjustmentForm") {
+        document.querySelector("#adjustDueContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        syncDueDateAdjustmentForm(true);
+      }
+      syncUserCaseActionSubmitState(form);
+    }
+
+    function initializeUserCaseActionGuards() {
+      ["addCaseForm", "updateStatusForm", "closeCaseForm", "dueDateAdjustmentForm"].forEach(formId => {
+        const form = document.querySelector(`#${formId}`);
+        if (!form || form.dataset.guardReady === "true") return;
+        form.dataset.guardReady = "true";
+        form.addEventListener("input", () => syncUserCaseActionSubmitState(form));
+        form.addEventListener("change", () => syncUserCaseActionSubmitState(form));
+      });
+      syncAllUserCaseActionSubmitStates();
+    }
+
+    function populateUserControls() {
+      refreshNewCaseIdPreview();""",
+        1,
+    )
+    html = html.replace(
+        """      const contractOptions = accessibleContracts.map(item => ({
+        value: item.id,
+        label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+      }));""",
+        """      const contractOptions = [
+        { value: "", label: "Select Contract / เลือกสัญญา" },
+        ...accessibleContracts.map(item => ({
+          value: item.id,
+          label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+        }))
+      ];""",
+        1,
+    )
+    html = html.replace(
+        """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
+      fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
+      fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
+        """      fillSelect("updateContract", contractOptions, lastUserContractId || "");
+      fillSelect("closeContract", contractOptions, lastUserContractId || "");
+      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");""",
+        1,
+    )
+    html = html.replace(
+        """      syncDueApprovalRecipientEmail(true);
+      updateSlaPreviews();
+    }""",
+        """      syncDueApprovalRecipientEmail(true);
+      updateSlaPreviews();
+      initializeUserCaseActionGuards();
+    }""",
+        1,
+    )
+    html = html.replace(
+        """      const accessibleContracts = contractsVisibleToCurrentUser();
+      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value) || accessibleContracts[0];
+      if (!contract) return;
+      document.querySelector("#adjustDueContractSummary").innerHTML = contractSummaryMarkup(contract);""",
+        """      const accessibleContracts = contractsVisibleToCurrentUser();
+      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value);
+      if (!contract) {
+        document.querySelector("#adjustDueContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        ["adjustSystemDue", "adjustCurrentDue", "dueRequestedBy", "adjustRequestedDue"].forEach(id => {
+          const input = document.querySelector(`#${id}`);
+          if (input) input.value = "";
+        });
+        const statusBadge = document.querySelector("#dueRequestStatus");
+        if (statusBadge) {
+          statusBadge.textContent = "Ready to Request";
+          statusBadge.className = "badge blue";
+        }
+        validateRequestedDueDate();
+        return;
+      }
+      document.querySelector("#adjustDueContractSummary").innerHTML = contractSummaryMarkup(contract);""",
+        1,
+    )
+    html = html.replace(
+        """      const initiallyAdjusted = finalDue !== systemDue;
+
+      const daysOnHand""",
+        """      const initiallyAdjusted = finalDue !== systemDue;
+      if (!beginUserCaseActionSubmit(formElement)) return;
+
+      const daysOnHand""",
+        1,
+    )
+    html = html.replace(
+        """      setView("user");
+      showToast(`${id} added · SLA ${totalSla} Working Days · Due ${finalDue}`);
+    });""",
+        """      setView("user");
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${id} added · SLA ${totalSla} Working Days · Due ${finalDue}`);
+    });""",
+        1,
+    )
+    html = html.replace(
+        """      if (!reason) {
+        document.querySelector("#dueAdjustmentReason")?.focus();
+        showToast("Please enter a reason for the Due Date adjustment request.");
+        return;
+      }
+      const request = {""",
+        """      if (!reason) {
+        document.querySelector("#dueAdjustmentReason")?.focus();
+        showToast("Please enter a reason for the Due Date adjustment request.");
+        return;
+      }
+      if (!beginUserCaseActionSubmit(formElement)) return;
+      const request = {""",
+        1,
+    )
+    html = html.replace(
+        """      syncDueDateAdjustmentForm(true);
+      showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);
+      openDueApprovalEmailPopup(draft);""",
+        """      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);
+      openDueApprovalEmailPopup(draft);""",
+        1,
+    )
+    html = html.replace(
+        """      syncUpdateReasonRequirement(alert);
+      if (!validateUpdateReasonBeforeAction()) return;
+
+      const nextCycle""",
+        """      syncUpdateReasonRequirement(alert);
+      if (!validateUpdateReasonBeforeAction()) return;
+      if (!beginUserCaseActionSubmit(formElement)) return;
+
+      const nextCycle""",
+        1,
+    )
+    html = html.replace(
+        "      if (!await uploadQueuedAttachmentsToCloud()) return;",
+        """      if (!await uploadQueuedAttachmentsToCloud()) {
+        finishUserCaseActionSubmit(formElement);
+        return;
+      }""",
+        1,
+    )
+    html = html.replace(
+        """      openStatusEmailPopup(emailDraft);
+      resetUpdateAttachments();
+      resetUpdateCcRecipients();""",
+        """      openStatusEmailPopup(emailDraft);
+      finishUserCaseActionSubmit(formElement, true);""",
+        1,
+    )
+    html = html.replace(
+        """    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);""",
+        """    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const formElement = event.currentTarget;
+      if (!beginUserCaseActionSubmit(formElement)) return;
+      const form = new FormData(formElement);""",
+        1,
+    )
+    html = html.replace(
+        """      setView("user");
+      showToast(`${id} closed`);
+    });""",
+        """      setView("user");
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${id} closed`);
+    });""",
         1,
     )
     html = html.replace(
@@ -5338,26 +6299,20 @@ def main():
       "Action Reason Type TH",
       "Action Reason Type EN",
       "Attachments",
-      "CC Recipients",
-      "Manual Days Override",
-      "Manual Alert Override"
+      "CC Recipients"
     ];
 
     const localDatabaseKey = `trackingContracts.csvDatabase.${driveDatabaseConfig.folderId}.v1`;
     let driveDatabaseSaveTimer = 0;
     let isApplyingDriveDatabaseLoad = false;
     let isDriveDatabaseSaveInProgress = false;
+    let isImmediateLineNotificationInProgress = false;
     let driveDatabaseSaveQueued = false;
     let driveDatabaseRefreshTimer = 0;
     let lastDriveDatabaseRefreshAt = 0;
     let driveDatabaseActiveLoads = 0;
-    let masterDataHasUnsavedChanges = false;
-
-    function markMasterDataDirty() {
-      if (masterDataHasUnsavedChanges) return;
-      masterDataHasUnsavedChanges = true;
-      updateDatabaseSyncStatus("Unsaved Master Data changes");
-    }
+    let driveDatabaseLoadSequence = 0;
+    let lastAppliedDriveDatabaseLoad = 0;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -5434,7 +6389,7 @@ def main():
         "Returns": item.returns,
         "Status Update": item.status,
         "Station": item.station,
-        "Station Owner": station.to || item.stationOwner || item.owner || "",
+        "Station Owner": station.to,
         "Add Case Date": item.addCaseDate || firstLogFor(item.id)?.[6] || "",
         "Due Date": item.due,
         "System Due Date": item.systemDue || "",
@@ -5706,6 +6661,14 @@ def main():
       return `${source.length}:${(hash >>> 0).toString(16)}`;
     }
 
+    function refreshDatabaseDrivenUi() {
+      refreshDashboardDataFromContracts();
+      renderAll();
+      editableDropdownRegistry.forEach((state, inputId) => {
+        if (state.wrapper.classList.contains("open")) refreshEditableDropdown(inputId);
+      });
+    }
+
     function driveDatabasePayloadFingerprint(payload) {
       return [
         "contractsCsvText",
@@ -5720,7 +6683,6 @@ def main():
 
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
-      if (masterDataHasUnsavedChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
       const typeMasterText = payload.typeMasterCsvText || payload.files?.typeMaster?.text || "";
@@ -5767,9 +6729,7 @@ def main():
 	      }));
       isApplyingDriveDatabaseLoad = false;
       if (migratedSlaCount || migratedDepartmentCount || migratedActionCount) scheduleDriveDatabaseSave();
-      refreshDashboardDataFromContracts();
-      renderMasterData();
-      renderAll();
+      refreshDatabaseDrivenUi();
       updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       return true;
     }
@@ -5778,8 +6738,9 @@ def main():
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint) return Promise.resolve(false);
       const silent = Boolean(options.silent);
-      if (driveDatabaseActiveLoads && !options.expectedFingerprint) return Promise.resolve(false);
+      if (driveDatabaseActiveLoads && !options.expectedFingerprint && !options.force) return Promise.resolve(false);
       driveDatabaseActiveLoads += 1;
+      const loadSequence = ++driveDatabaseLoadSequence;
       const callbackName = `t23DriveDb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const params = new URLSearchParams({
         mode: "loadDriveDatabase",
@@ -5813,7 +6774,12 @@ def main():
         }, 15000);
         window[callbackName] = payload => {
           try {
+            if (loadSequence < lastAppliedDriveDatabaseLoad) {
+              finish(false);
+              return;
+            }
             const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "" });
+            if (applied) lastAppliedDriveDatabaseLoad = loadSequence;
             if (!applied && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
             finish(applied);
           } catch (error) {
@@ -5832,10 +6798,10 @@ def main():
 
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
-      if (!endpoint || isApplyingDriveDatabaseLoad) return;
+      if (!endpoint || isApplyingDriveDatabaseLoad) return false;
       if (isDriveDatabaseSaveInProgress) {
         driveDatabaseSaveQueued = true;
-        return;
+        return false;
       }
       window.clearTimeout(driveDatabaseSaveTimer);
       driveDatabaseSaveTimer = 0;
@@ -5851,7 +6817,7 @@ def main():
           headers: { "Content-Type": "text/plain" },
           body: JSON.stringify(payload)
         });
-        const retryDelays = [500, 1000, 1800, 3000];
+        const retryDelays = [300, 700, 1200, 2000, 3500];
         let verified = false;
         for (const delayMs of retryDelays) {
           await new Promise(resolve => window.setTimeout(resolve, delayMs));
@@ -5861,6 +6827,7 @@ def main():
         updateDatabaseSyncStatus(verified
           ? `${contracts.length} contracts saved and refreshed from Shared Drive`
           : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
+        if (verified) await runImmediateLineStatusNotifications();
         return verified;
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
@@ -5871,6 +6838,31 @@ def main():
           driveDatabaseSaveQueued = false;
           scheduleDriveDatabaseSave();
         }
+      }
+    }
+
+    async function runImmediateLineStatusNotifications(options = {}) {
+      const endpoint = driveDatabaseEndpoint();
+      if (!endpoint || isImmediateLineNotificationInProgress) return false;
+      isImmediateLineNotificationInProgress = true;
+      try {
+        await fetch(endpoint, {
+          method: "POST",
+          mode: "no-cors",
+          redirect: "follow",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            mode: "runLineStatusNotifications",
+            source: options.source || "immediateAfterDriveSave",
+            forceSend: options.forceSend === true
+          })
+        });
+        return true;
+      } catch (error) {
+        console.warn("Immediate LINE notification request failed.", error);
+        return false;
+      } finally {
+        isImmediateLineNotificationInProgress = false;
       }
     }
 
@@ -5885,14 +6877,14 @@ def main():
     }
 
     function refreshDriveDatabaseIfActive() {
-      if (!currentUser || document.hidden || masterDataHasUnsavedChanges || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
-      if (Date.now() - lastDriveDatabaseRefreshAt < 5000) return;
-      loadDriveDatabaseFromCloud({ silent: true });
+      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (Date.now() - lastDriveDatabaseRefreshAt < 2000) return;
+      loadDriveDatabaseFromCloud({ silent: true, force: true });
     }
 
     function startDriveDatabaseAutoRefresh() {
       window.clearInterval(driveDatabaseRefreshTimer);
-      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 15000);
+      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 8000);
       if (!document.body.dataset.driveRefreshBound) {
         document.body.dataset.driveRefreshBound = "true";
         window.addEventListener("focus", refreshDriveDatabaseIfActive);
@@ -6190,7 +7182,7 @@ def main():
     }
 
     function masterDeleteButton() {
-      return `<button class="icon-button" type="button" data-remove-master-row title="Remove this row only">×</button>`;
+      return `<button class="icon-button" type="button" data-remove-master-row title="Remove row">×</button>`;
     }
 
     function stationOwnerForMasterContract(contract) {
@@ -6206,7 +7198,7 @@ def main():
             <td>${masterInput("owner", contract.owner)}</td>
             <td>${masterInput("type", contractPrimaryTypeDisplay(contract.type))}</td>
             <td>${masterInput("stage", contract.stage)}</td>
-            <td>${masterInput("status", contract.status)}</td>
+            <td><input type="hidden" data-master-field="status" value="${escapeHtml(contract.status)}">${masterReadOnly(formatContractStatusLabel(contract.status))}</td>
             <td>${masterInput("stationOwner", stationOwnerForMasterContract(contract))}</td>
             <td>${masterInput("addCaseDate", addCaseStartDateForContract(contract), { type: "date" })}</td>
             <td>${masterInput("due", contract.due, { type: "date" })}</td>
@@ -6227,52 +7219,21 @@ def main():
 
       const logBody = document.querySelector("#masterLogRows");
       if (logBody) {
-        const sortedLogRows = logRecords.slice().sort((left, right) =>
-          String(left?.[0] || "").localeCompare(String(right?.[0] || ""))
-          || (Number(left?.[2]) || 0) - (Number(right?.[2]) || 0)
-          || (Number(left?.[1]) || 0) - (Number(right?.[1]) || 0)
-        );
-        let previousCycleGroup = "";
-        logBody.innerHTML = sortedLogRows.map(row => {
+        logBody.innerHTML = logRecords.map(row => {
           const actionChoices = row[12] && !updateActionList.includes(row[12]) ? [row[12], ...updateActionList] : updateActionList;
-          const cycleGroup = `${row[0]}::${row[2]}`;
-          const startsCycle = cycleGroup !== previousCycleGroup;
-          previousCycleGroup = cycleGroup;
           return `
-          <tr class="master-log-row${startsCycle ? " cycle-start" : ""}" data-master-log-row data-contract-id="${escapeHtml(row[0])}" data-cycle="${escapeHtml(row[2])}" data-log-no="${escapeHtml(row[1])}">
-            <td>${startsCycle ? `<span class="master-log-cycle-label">${escapeHtml(row[0])} · Cycle ${escapeHtml(row[2])}</span>` : ""}<input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
+          <tr>
+            <td><input type="hidden" data-master-field="_originalContractId" value="${escapeHtml(row[0])}"><input type="hidden" data-master-field="_originalLogNo" value="${escapeHtml(row[1])}">${masterInput("contractId", row[0])}</td>
             <td>${masterInput("logNo", row[1], { type: "number" })}</td>
             <td>${masterInput("cycle", row[2], { type: "number" })}</td>
-            <td>${masterInput("logView", row[3])}</td>
             <td>${masterInput("from", row[4])}</td>
             <td>${masterInput("to", row[5])}</td>
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
             <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
             <td>${masterInput("sla", row[8], { type: "number" })}</td>
-            <td>${masterInput("daysOnHand", row[9], { type: "number" })}</td>
-            <td>${masterInput("alert", row[10])}</td>
-            <td>${masterInput("delayReason", row[11])}</td>
+            <td>${masterReadOnly(row[9])}</td>
+            <td>${masterReadOnly(row[10])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
-            <td>${masterInput("actionSummary", row[13] || "")}</td>
-            <td>${masterInput("handoffCheck", row[14] || "")}</td>
-            <td>${masterInput("finalAction", row[15] || "")}</td>
-            <td>${masterInput("actionReasonType", row[16] || "")}</td>
-            <td>${masterInput("actionReason", row[17] || "", { multiline: true })}</td>
-            <td>${masterInput("approvalType", row[18] || "")}</td>
-            <td>${masterInput("approvalConditions", row[19] || "", { multiline: true })}</td>
-            <td>${masterInput("correctiveAction", row[20] || "", { multiline: true })}</td>
-            <td>${masterInput("updatedBy", row[21] || "")}</td>
-            <td>${masterInput("updatedAt", row[22] || "")}</td>
-            <td>${masterInput("actionCode", row[23] || "")}</td>
-            <td>${masterInput("actionNameTh", row[24] || "")}</td>
-            <td>${masterInput("actionNameEn", row[25] || "")}</td>
-            <td>${masterInput("actionDescriptionTh", row[26] || "", { multiline: true })}</td>
-            <td>${masterInput("actionDescriptionEn", row[27] || "", { multiline: true })}</td>
-            <td>${masterInput("actionSla", row[28] || 0, { type: "number" })}</td>
-            <td>${masterInput("actionReasonTypeTh", row[29] || "")}</td>
-            <td>${masterInput("actionReasonTypeEn", row[30] || "")}</td>
-            <td>${masterInput("attachmentsJson", JSON.stringify(Array.isArray(row[31]) ? row[31] : []), { multiline: true })}</td>
-            <td>${masterInput("ccRecipientsJson", JSON.stringify(Array.isArray(row[32]) ? row[32] : []), { multiline: true })}</td>
             <td>${masterDeleteButton()}</td>
           </tr>`;
         }).join("");
@@ -6375,7 +7336,7 @@ def main():
         ...readMasterRows("#masterContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "" })),
         ...readMasterRows("#masterConfidentialContractRows", contractFields, "_originalId").map(row => ({ ...row, accessLevel: "Confidential" }))
       ];
-      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "logView", "from", "to", "inDate", "outDate", "sla", "daysOnHand", "alert", "delayReason", "action", "actionSummary", "handoffCheck", "finalAction", "actionReasonType", "actionReason", "approvalType", "approvalConditions", "correctiveAction", "updatedBy", "updatedAt", "actionCode", "actionNameTh", "actionNameEn", "actionDescriptionTh", "actionDescriptionEn", "actionSla", "actionReasonTypeTh", "actionReasonTypeEn", "attachmentsJson", "ccRecipientsJson"], "_originalContractId");
+      const logRows = readMasterRows("#masterLogRows", ["_originalContractId", "_originalLogNo", "contractId", "logNo", "cycle", "from", "to", "inDate", "outDate", "sla", "action"], "_originalContractId");
       const nextContracts = [];
       const keptIds = new Set();
       const idMap = new Map();
@@ -6417,7 +7378,7 @@ def main():
           type,
           vendor: String(original.vendor || "").trim(),
           stage: String(row.stage || original.stage || "Draft Created").trim(),
-          status: String(row.status || original.status || original.alert || "Green >>G=On Track").trim(),
+          status: String(original.status || "Green >>G=On Track").trim(),
           station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,
           addCaseDate,
           due: String(row.due || original.due || "").trim(),
@@ -6426,7 +7387,7 @@ def main():
           used,
           days: Number(original.days || used) || 0,
           balance: Number(original.balance || (totalSla - used)) || 0,
-          alert: String(row.status || original.alert || original.status || "Green >>G=On Track").trim(),
+          alert: String(original.alert || "Green >>G=On Track").trim(),
           accessLevel,
           visibility: String(original.visibility || (accessLevel === "Confidential" ? "Restricted access / จำกัดสิทธิ์" : "Standard access / สิทธิ์ทั่วไป")).trim(),
           category: String(original.category || contractTypeCategoryFor(type)).trim()
@@ -6442,54 +7403,12 @@ def main():
         const originalLog = logRecords.find(item => String(item?.[0] || "") === originalContractId && String(item?.[1] || "") === originalLogNo) || [];
         const logNo = Number(row.logNo || originalLog[1] || 0);
         const cycle = Number(row.cycle || originalLog[2] || 1);
-        const requestedLogView = String(row.logView || originalLog[3] || "").trim();
-        let from = String(row.from || originalLog[4] || "").trim();
-        let to = String(row.to || originalLog[5] || "").trim();
-        const fromWasChanged = from !== String(originalLog[4] || "").trim();
-        const toWasChanged = to !== String(originalLog[5] || "").trim();
-        const logViewWasChanged = requestedLogView !== String(originalLog[3] || "").trim();
-        if (logViewWasChanged && !fromWasChanged && !toWasChanged) {
-          const route = stationParts(requestedLogView);
-          if (route.from && route.to) {
-            from = route.from;
-            to = route.to;
-          }
-        }
-        const logView = logViewWasChanged && !fromWasChanged && !toWasChanged ? requestedLogView : `From ${from} >> To ${to}`;
+        const from = String(row.from || originalLog[4] || "").trim();
+        const to = String(row.to || originalLog[5] || "").trim();
         const nextIn = dateToInputValue(row.inDate || "");
         const nextOut = dateToInputValue(row.outDate || "");
         const sla = Number(row.sla || originalLog[8] || 0);
-        const daysOnHand = Number(row.daysOnHand);
-        const alert = String(row.alert || "").trim();
-        const delayReason = String(row.delayReason || "").trim();
         const action = String(row.action || originalLog[12] || "").trim();
-        const actionSummary = String(row.actionSummary || "").trim();
-        const handoffCheck = String(row.handoffCheck || "").trim();
-        const finalAction = String(row.finalAction || "").trim();
-        const actionReasonType = String(row.actionReasonType || "").trim();
-        const actionReason = String(row.actionReason || "").trim();
-        const approvalType = String(row.approvalType || "").trim();
-        const approvalConditions = String(row.approvalConditions || "").trim();
-        const correctiveAction = String(row.correctiveAction || "").trim();
-        const updatedBy = String(row.updatedBy || "").trim();
-        const updatedAt = String(row.updatedAt || "").trim();
-        const actionCode = String(row.actionCode || "").trim();
-        const actionNameTh = String(row.actionNameTh || "").trim();
-        const actionNameEn = String(row.actionNameEn || "").trim();
-        const actionDescriptionTh = String(row.actionDescriptionTh || "").trim();
-        const actionDescriptionEn = String(row.actionDescriptionEn || "").trim();
-        const actionSla = Number(row.actionSla || 0);
-        const actionReasonTypeTh = String(row.actionReasonTypeTh || "").trim();
-        const actionReasonTypeEn = String(row.actionReasonTypeEn || "").trim();
-        let attachments = null;
-        let ccRecipients = null;
-        try {
-          attachments = JSON.parse(String(row.attachmentsJson || "[]"));
-          ccRecipients = JSON.parse(String(row.ccRecipientsJson || "[]"));
-        } catch (error) {
-          hasLogError = true;
-          return;
-        }
         const logKey = `${contractId}::${logNo}`;
         if (!contractId) {
           hasLogError = true;
@@ -6501,7 +7420,7 @@ def main():
           hasLogError = true;
           return;
         }
-        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !Number.isFinite(daysOnHand) || daysOnHand < 0 || !alert || !action || !Number.isFinite(actionSla) || actionSla < 0 || !Array.isArray(attachments) || !Array.isArray(ccRecipients) || usedLogKeys.has(logKey)) {
+        if (!Number.isFinite(logNo) || logNo <= 0 || !Number.isFinite(cycle) || cycle <= 0 || !from || !to || !nextIn || (nextOut && normalizeDateOnly(nextOut) < normalizeDateOnly(nextIn)) || !Number.isFinite(sla) || sla < 0 || !action || usedLogKeys.has(logKey)) {
           hasLogError = true;
           return;
         }
@@ -6509,47 +7428,22 @@ def main():
         const originalIn = dateToInputValue(originalLog[6] || "");
         if (Number(logNo) === 1 && nextIn !== originalIn) firstLogInChanged.add(contractId);
         const nextLog = Array.isArray(originalLog) ? [...originalLog] : Array.from({ length: logDatabaseHeaders.length }, () => "");
-        const timingInputsChanged = dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
-        const manualDaysChanged = Number(nextLog[9] || 0) !== daysOnHand;
-        const manualAlertChanged = String(nextLog[10] || "") !== alert;
-        const metadataChanged = String(nextLog[3] || "") !== logView || String(nextLog[13] || "") !== actionSummary || String(nextLog[14] || "") !== handoffCheck || String(nextLog[15] || "") !== finalAction || String(nextLog[16] || "") !== actionReasonType || String(nextLog[17] || "") !== actionReason || String(nextLog[18] || "") !== approvalType || String(nextLog[19] || "") !== approvalConditions || String(nextLog[20] || "") !== correctiveAction || String(nextLog[23] || "") !== actionCode || String(nextLog[24] || "") !== actionNameTh || String(nextLog[25] || "") !== actionNameEn || String(nextLog[26] || "") !== actionDescriptionTh || String(nextLog[27] || "") !== actionDescriptionEn || Number(nextLog[28] || 0) !== actionSla || String(nextLog[29] || "") !== actionReasonTypeTh || String(nextLog[30] || "") !== actionReasonTypeEn || JSON.stringify(nextLog[31] || []) !== JSON.stringify(attachments) || JSON.stringify(nextLog[32] || []) !== JSON.stringify(ccRecipients);
-        const auditChanged = String(nextLog[21] || "") !== updatedBy || String(nextLog[22] || "") !== updatedAt;
-        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || timingInputsChanged || manualDaysChanged || manualAlertChanged || String(nextLog[11] || "") !== delayReason || metadataChanged || auditChanged;
+        const changed = String(nextLog[0] || "") !== contractId || Number(nextLog[1] || 0) !== logNo || Number(nextLog[2] || 0) !== cycle || String(nextLog[4] || "") !== from || String(nextLog[5] || "") !== to || dateToInputValue(nextLog[6] || "") !== nextIn || dateToInputValue(nextLog[7] || "") !== nextOut || Number(nextLog[8] || 0) !== sla || String(nextLog[12] || "") !== action;
         nextLog[0] = contractId;
         nextLog[1] = logNo;
         nextLog[2] = cycle;
-        nextLog[3] = logView;
+        nextLog[3] = `From ${from} >> To ${to}`;
         nextLog[4] = from;
         nextLog[5] = to;
         nextLog[6] = nextIn;
         nextLog[7] = nextOut;
         nextLog[8] = sla;
-        nextLog[33] = manualDaysChanged ? daysOnHand : (timingInputsChanged ? "" : (originalLog[33] ?? ""));
-        nextLog[34] = manualAlertChanged ? alert : (timingInputsChanged ? "" : (originalLog[34] ?? ""));
-        nextLog[11] = delayReason;
         nextLog[12] = action;
-        nextLog[13] = actionSummary;
-        nextLog[14] = handoffCheck;
-        nextLog[15] = finalAction;
-        nextLog[16] = actionReasonType;
-        nextLog[17] = actionReason;
-        const actionInfo = actionDefinition(action);
-        nextLog[18] = approvalType;
-        nextLog[19] = approvalConditions;
-        nextLog[20] = correctiveAction;
-        nextLog[23] = actionCode || actionInfo.code;
-        nextLog[24] = actionNameTh || actionInfo.nameTh;
-        nextLog[25] = actionNameEn || actionInfo.nameEn;
-        nextLog[26] = actionDescriptionTh || actionInfo.descriptionTh;
-        nextLog[27] = actionDescriptionEn || actionInfo.descriptionEn;
-        nextLog[28] = actionSla || Number(sla) || actionInfo.sla;
-        nextLog[29] = actionReasonTypeTh || actionInfo.reasonTh;
-        nextLog[30] = actionReasonTypeEn || actionInfo.reasonEn;
-        nextLog[31] = attachments;
-        nextLog[32] = ccRecipients;
+        nextLog[28] = Number(nextLog[28] || sla) || sla;
         if (changed) {
-          nextLog[21] = auditChanged ? updatedBy : (currentUser?.name || "Admin");
-          nextLog[22] = auditChanged ? updatedAt : localIsoDateTime();
+          nextLog[13] = nextLog[13] || `${action} by ${currentUser?.name || "Admin"}`;
+          nextLog[21] = currentUser?.name || "Admin";
+          nextLog[22] = localIsoDateTime();
         }
         recalculateLogTiming(nextLog);
         nextLogRecords.push(nextLog);
@@ -6560,7 +7454,7 @@ def main():
         return false;
       }
       if (hasLogError) {
-        showToast("Log Records require valid IDs, dates, SLA values, Action, unique Log No, and valid JSON arrays for Attachments and CC Recipients");
+        showToast("Log Records require valid Contract ID, Log No, Cycle, From, To, In, SLA, Action, and unique Log No per Contract");
         return false;
       }
 
@@ -6623,26 +7517,18 @@ def main():
 	            active: row.active || "Yes"
 	          };
 	        });
+	      contracts.forEach(syncContractTimingFromLogs);
+	      refreshDashboardDataFromContracts();
 	      return true;
 	    }
 
     function addMasterRow(kind) {
       if (!normalizeMasterDataFromUi()) return;
-      if (kind === "logs") {
-        const contract = contracts[0];
-        if (!contract) return;
-        const station = stationParts(contract.station);
-        const from = station.to || contract.stationOwner || contract.owner || "Owner";
-        const nextLogNo = logRecords.filter(row => row[0] === contract.id).length + 1;
-        addLogRecord({ contractId: contract.id, cycle: contract.cycle || 1, station: `From ${from} >> To ${from}`, from, to: from, inDate: todayInputValue(), outDate: "", sla: 1, delayReason: "", action: "Submit to Review", updatedBy: currentUser?.name || "Admin" });
-        logRecords.at(-1)[1] = nextLogNo;
-      }
       if (kind === "departments") masterData.departments.push({ "Department / Restaurant": "", "Department Code": "", "Department Data Version": departmentDataVersion, Active: "Yes" });
 	      if (kind === "people") masterData.people.push({ company: "Turtle 23", department: "", name: "", email: "", lineUserId: "", lineNotifications: "Yes", active: "Yes" });
 	      if (kind === "contractTypes") masterData.contractTypes.push({ "Contract Classification": "Day-to-day Work / งานดำเนินงานทั่วไป", Category: "Day-to-day Work / งานดำเนินงานทั่วไป", "Type of Contract": "", "Sub Type of Contract": "", "Fixed SLA (Working Days)": "", "Standard SLA Version": standardSlaDataVersion, "Description / คำอธิบาย": "", Active: "Yes" });
 	      if (kind === "actionSla") masterData.actionSla.push({ Action: "Submit to Review", "Description / รายละเอียด": actionDescriptionConfig["Submit to Review"].descriptionTh, "Fixed SLA (Working Days)": "", "SLA Rule / วิธีนับ": actionDescriptionConfig["Submit to Review"].slaRuleTh, "Action Data Version": actionDataVersion, Active: "Yes" });
 	      if (kind === "contractTemplates") masterData.contractTemplates.push({ classification: "Day-to-day Work / งานดำเนินงานทั่วไป", typeGroup: "", subType: "", name: "", selectionLabel: "", sourceRow: "", type: "", workType: "", contractId: "", accessLevel: "Normal", category: "Day-to-day Work / งานดำเนินงานทั่วไป", department: "", vendor: "", group: "", fixedSla: "", slaVersion: standardSlaDataVersion, active: "Yes" });
-      markMasterDataDirty();
       renderMasterData();
     }
 
@@ -6650,13 +7536,23 @@ def main():
       if (!requireSystemAdministrator()) return;
       if (!window.confirm("Confirm save Master Data to Database?")) return;
       if (!normalizeMasterDataFromUi()) return;
+      const saveButton = document.querySelector("#saveMasterDataBtn");
+      const originalLabel = saveButton?.textContent || "Save Master Data";
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving...";
+      }
+      refreshDatabaseDrivenUi();
       saveContractsDatabase({ syncCloud: false });
       const verified = await saveDriveDatabaseToCloud();
-      masterDataHasUnsavedChanges = !verified;
-      if (!masterDataHasUnsavedChanges) renderMasterData();
-      populateUserControls();
-      renderUserCasePreview();
-      notifyDatabaseSaved(verified ? "Master Data saved and refreshed from Shared Drive." : "Master Data saved locally. Shared Drive verification is pending.");
+      refreshDatabaseDrivenUi();
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = originalLabel;
+      }
+      notifyDatabaseSaved(verified
+        ? "Master Data saved and refreshed from Shared Drive."
+        : "Master Data saved locally. Shared Drive verification is pending.");
     }
 
     function setupMasterDataControls() {
@@ -6664,11 +7560,7 @@ def main():
       document.querySelectorAll("[data-add-master-row]").forEach(button => {
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
-      const masterView = document.querySelector("#master");
-      ["input", "change"].forEach(eventName => masterView?.addEventListener(eventName, event => {
-        if (event.target.closest("[data-master-field]")) markMasterDataDirty();
-      }));
-      masterView?.addEventListener("click", event => {
+      document.querySelector("#master")?.addEventListener("click", event => {
         const importButton = event.target.closest("[data-master-import]");
         if (importButton) {
           openMasterImportPicker(importButton.dataset.masterImport);
@@ -6681,16 +7573,9 @@ def main():
         }
         const removeButton = event.target.closest("[data-remove-master-row]");
         if (!removeButton) return;
-        const row = removeButton.closest("tr");
-        if (!row) return;
-        if (row.matches("[data-master-log-row]")) {
-          const label = `${row.dataset.contractId || "Contract"} · Log ${row.dataset.logNo || "-"} · Cycle ${row.dataset.cycle || "-"}`;
-          if (!window.confirm(`Remove this row only?\n${label}`)) return;
-        }
-        markMasterDataDirty();
-        row.remove();
+        removeButton.closest("tr")?.remove();
       });
-      if (!masterDataHasUnsavedChanges) renderMasterData();
+      renderMasterData();
     }
 
     function setupCsvDatabaseControls() {
@@ -6734,6 +7619,9 @@ def main():
     loadDriveDatabaseFromCloud();""",
     )
     html = html.replace("Mockup Data · จำนวน Delayed / Overdue แตกต่างกันตาม Contract Owner และ Department", "Excel Data · ข้อมูล Contract ID / SLA จาก workbook จริง")
+    html = html.replace("                  <small>Horizontal stacked bars by Contract Owner · sorted high to low by Delayed + Overdue</small>\n", "")
+    html = html.replace("                  <small>Horizontal stacked bars by Department · sorted high to low by Delayed + Overdue</small>\n", "")
+    html = html.replace('        <div class="mock-data-banner">Excel Data · ข้อมูล Contract ID / SLA จาก workbook จริง</div>\n', "")
     html = html.replace("applyDiverseMockupData();\n    normalizeExistingData();", "    // Real workbook data is embedded above. Keep the mock generator available for reference, but do not run it.\n    normalizeExistingData();")
     html = html.replace("    // Fixed SLA values imported\n    });\n\n    // Fixed SLA values imported from", "    // Fixed SLA values imported from")
     html = html.replace("    // Contract examples imported\n    });\n\n    // Contract examples imported from", "    // Contract examples imported from")
@@ -7147,7 +8035,7 @@ def main():
         """      renderUserCasePreview();
       syncNavCounts();""",
         """      renderUserCasePreview();
-      if (!masterDataHasUnsavedChanges) renderMasterData();
+      renderMasterData();
       syncNavCounts();""",
     )
     html = html.replace(
@@ -7215,272 +8103,6 @@ def main():
     html = html.replace(
         'const longestPendingOnHand = dashboardData',
         'const longestPendingOnHand = visibleDashboardData',
-        1,
-    )
-    html = html.replace(
-        '''      const longestPendingOnHand = visibleDashboardData
-        .filter(item => item.isPending === 1 && item.alertCode === "R")
-        .map(item => {
-          const contract = contracts.find(row => row.id === item.id) || {};
-          const latestLog = latestLogFor(item.id);
-          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
-          return {
-            id: item.id,
-            name: item.name || contract.name || "-",
-            type: contract.type || "-",
-            vendor: contract.vendor || "-",
-            department: item.department || contract.department || "-",
-            contractOwner: item.owner || contract.owner || "Unassigned",
-            stationOwner,
-            pendingDays: Number(item.pendingDays) || Number(contract.used) || 0
-          };
-        })
-        .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));''',
-        '''      const longestPendingOnHand = visibleDashboardData
-        .filter(item => item.isPending === 1)
-        .map(item => {
-          const contract = contracts.find(row => row.id === item.id) || {};
-          const latestLog = latestLogFor(item.id);
-          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
-          const latestAlert = latestLog?.[10] || contract.alert || item.status || "";
-          const pendingDays = latestLog
-            ? calculateDaysOnHand(latestLog[6], latestLog[7])
-            : Number(contract.days) || 0;
-          return {
-            id: item.id,
-            name: item.name || contract.name || "-",
-            type: contract.type || "-",
-            vendor: contract.vendor || "-",
-            department: item.department || contract.department || "-",
-            contractOwner: item.owner || contract.owner || "Unassigned",
-            stationOwner,
-            alertCode: statusCodeFor(latestAlert),
-            pendingDays
-          };
-        })
-        .filter(item => item.alertCode === "R")
-        .sort((a, b) => b.pendingDays - a.pendingDays || a.id.localeCompare(b.id));''',
-        1,
-    )
-    html = html.replace(
-        '          contract.station = latestLog[3];',
-        '          contract.station = latestLog[3];\n          contract.stationOwner = latestLog[5] || stationParts(latestLog[3]).to || contract.stationOwner || "";',
-        1,
-    )
-    html = html.replace(
-        '        station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),',
-        '        station: String(row["Station"] || `From ${owner || "Owner"} >> To ${stationOwner}`).trim(),\n        stationOwner,',
-        1,
-    )
-    html = html.replace(
-        '        station: `From ${owner} >> To ${to}`,',
-        '        station: `From ${owner} >> To ${to}`,\n        stationOwner: to,',
-        1,
-    )
-    html = html.replace(
-        '      contract.station = `From ${from} >> To ${to}`;',
-        '      contract.station = `From ${from} >> To ${to}`;\n      contract.stationOwner = to;',
-        1,
-    )
-    html = html.replace(
-        '      contract.station = `From ${owner} >> To ${owner}`;',
-        '      contract.station = previousStation;\n      contract.stationOwner = previousStationOwner;',
-        1,
-    )
-    html = html.replace(
-        '''      const stage = form.get("stage");
-      const to = String(form.get("to") || "").trim();
-      syncCloseRecipientEmail(true);''',
-        '''      const stage = form.get("stage");
-      const to = String(form.get("to") || "").trim();
-      const previousStationLog = latestStationLogFor(id);
-      const previousStationOwner = previousStationLog?.[5] || contract.stationOwner || stationParts(contract.station).to || owner;
-      const previousStation = previousStationLog?.[3] || contract.station || `From ${owner} >> To ${previousStationOwner}`;
-      syncCloseRecipientEmail(true);''',
-        1,
-    )
-    html = html.replace(
-        '''        station: contract.station,
-        from: owner,
-        to: owner,
-        inDate: closeDate,''',
-        '''        station: contract.station,
-        from: owner,
-        to: previousStationOwner,
-        inDate: closeDate,''',
-        1,
-    )
-    html = html.replace(
-        '          station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,',
-        '          station: `From ${owner || stationParts(original.station || "").from || "Owner"} >> To ${stationOwner}`,\n          stationOwner,',
-        1,
-    )
-
-    # Preserve the named Action Reason fields and Due Date approver list in regenerated HTML.
-    html = html.replace('name="approver" id="dueApprovalTo" multiple size="2"', 'name="approver" id="dueApprovalTo" multiple size="3"', 1)
-    html = html.replace(
-        'เลือกได้ 1 หรือ 2 อีเมล โดยระบบเลือกทั้งสองรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.',
-        'เลือกได้ 1 ถึง 3 อีเมล โดยระบบเลือกทุกรายการไว้เป็นค่าเริ่มต้น · Use Ctrl/Cmd to change multiple selection.',
-        1,
-    )
-    html = html.replace(
-        'const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com"];',
-        'const allowedApproverEmails = ["henry.t@turtle23.com", "thanongsak.c@turtle23.com", "sarocha.k@turtle23.com"];',
-        1,
-    )
-    html = html.replace(
-        '''      const reasonTypeEn = row[30] || row[16] || "";
-      const reasonTypeTh = row[29] || "";
-      const reasonDetail = row[17] || row[13] || row[11] || "";''',
-        '''      const contract = contracts.find(item => item.id === row[0]) || {};
-      const actionName = String(row[12] || row[25] || "").trim();
-      const isAddCase = actionName === "Draft Created";
-      const isDueDateRequest = actionName === "Due Date Adjustment Requested";
-      const dueDateReason = isDueDateRequest
-        ? String(row[11] || "").replace(/^Requested Due Date\\s+[^:]+:\\s*/i, "").trim()
-        : "";
-      const reasonTypeEn = row[30] || row[16]
-        || (isAddCase ? "Additional note >> Remark" : "")
-        || (isDueDateRequest ? "Reason for Due Date Adjustment" : "");
-      const reasonTypeTh = row[29]
-        || (isAddCase ? "ข้อมูลประกอบ >> หมายเหตุ" : "")
-        || (isDueDateRequest ? "เหตุผลในการขอปรับ Due Date" : "");
-      const reasonDetail = row[17]
-        || (isAddCase ? contract.remark || "" : "")
-        || dueDateReason
-        || row[13]
-        || row[11]
-        || "";
-      const isRequiredReason = ["Return", "Resubmit", "Forward", "Due Date Adjustment Requested"].includes(actionName);
-      const reasonLabelEn = `${reasonTypeEn || "Reason"}${isRequiredReason ? "*" : ""}`;
-      const reasonLabelTh = `${reasonTypeTh || "เหตุผล"}${isRequiredReason ? "*" : ""}`;''',
-        1,
-    )
-    html = html.replace(
-        '''        ["Reason Type", "ประเภทเหตุผล", reasonTypeEn, reasonTypeTh],
-        ["Reason", "เหตุผล", reasonDetail, ""],
-        ["Delay Reason", "เหตุผลที่ล่าช้า", row[11] || "", ""],''',
-        '''        ...(String(reasonDetail || "").trim() ? [[reasonLabelEn, reasonLabelTh, reasonDetail, ""]] : []),
-        ["Delay Reason", "เหตุผลที่ล่าช้า", isDueDateRequest ? "" : row[11] || "", ""],''',
-        1,
-    )
-    html = html.replace(
-        '''        delayReason: "",
-        action: "Draft Created"
-      });''',
-        '''        delayReason: "",
-        action: "Draft Created",
-        actionReasonType: baseRemark ? "Additional note >> Remark" : "",
-        actionReason: baseRemark,
-        actionReasonTypeTh: baseRemark ? "ข้อมูลประกอบ >> หมายเหตุ" : "",
-        actionReasonTypeEn: baseRemark ? "Additional note >> Remark" : ""
-      });''',
-        1,
-    )
-    html = html.replace(
-        '''        delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
-        action: "Due Date Adjustment Requested"
-      });''',
-        '''        delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
-        action: "Due Date Adjustment Requested",
-        actionReasonType: "Reason for Due Date Adjustment",
-        actionReason: reason,
-        actionReasonTypeTh: "เหตุผลในการขอปรับ Due Date",
-        actionReasonTypeEn: "Reason for Due Date Adjustment"
-      });''',
-        1,
-    )
-    html = html.replace(
-        '''        const latestLog = contractLogs.at(-1);
-        contract.stage = migrateAction(latestLog?.[12] || contract.stage);''',
-        '''        const latestLog = contractLogs.at(-1);
-        const latestStationLog = contractLogs.filter(logChangesStationOwner).at(-1) || latestLog;
-        contract.stage = migrateAction(latestLog?.[12] || contract.stage);''',
-        1,
-    )
-    html = html.replace(
-        '''          contract.station = latestLog[3];
-          contract.stationOwner = latestLog[5] || stationParts(latestLog[3]).to || contract.stationOwner || "";''',
-        '''          contract.station = latestStationLog?.[3] || contract.station;
-          contract.stationOwner = latestStationLog?.[5] || stationParts(latestStationLog?.[3] || contract.station).to || contract.stationOwner || "";''',
-        1,
-    )
-    html = html.replace(
-        '''          const latestLog = latestLogFor(item.id);
-          const stationOwner = latestLog?.[5] || item.currentTo || contract.owner || "Unassigned";
-          const latestAlert = latestLog?.[10] || contract.alert || item.status || "";
-          const pendingDays = latestLog
-            ? calculateDaysOnHand(latestLog[6], latestLog[7])''',
-        '''          const latestStationLog = latestStationLogFor(item.id);
-          const stationOwner = latestStationLog?.[5] || item.currentTo || contract.stationOwner || contract.owner || "Unassigned";
-          const latestAlert = latestStationLog?.[10] || contract.alert || item.status || "";
-          const pendingDays = latestStationLog
-            ? calculateDaysOnHand(latestStationLog[6], latestStationLog[7])''',
-        1,
-    )
-    html = html.replace(
-        '''        const latestLog = latestLogFor(item.id);
-        return latestLog ? latestLog[5] : stationParts(item.station).to;''',
-        '''        const latestStationLog = latestStationLogFor(item.id);
-        return latestStationLog ? latestStationLog[5] : stationParts(item.station).to;''',
-    )
-    html = html.replace(
-        '''        const latestLog = latestLogFor(item.id);
-        const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;''',
-        '''        const latestStationLog = latestStationLogFor(item.id);
-        const latestStationOwner = latestStationLog ? latestStationLog[5] : stationParts(item.station).to;''',
-    )
-    html = html.replace(
-        '''        const latestLogButton = latestLog
-          ? logRouteLink(latestLog)
-          : stationOwnerLink(item.station, item.id);
-        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestLog);''',
-        '''        const latestLogButton = latestStationLog
-          ? logRouteLink(latestStationLog)
-          : stationOwnerLink(item.station, item.id);
-        const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestStationLog);''',
-        1,
-    )
-    html = html.replace(
-        '''    function latestLogFor(contractId) {
-      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
-    }
-
-    function firstLogFor(contractId) {''',
-        '''    function latestLogFor(contractId) {
-      return logRecords.filter(row => row[0] === contractId).slice(-1)[0] || null;
-    }
-
-    function logChangesStationOwner(row) {
-      const action = String(row?.[12] || "").trim();
-      return !/^Due Date\\b/i.test(action);
-    }
-
-    function latestStationLogFor(contractId) {
-      const contractLogs = logRecords.filter(row => row[0] === contractId);
-      return contractLogs.filter(logChangesStationOwner).slice(-1)[0] || contractLogs.slice(-1)[0] || null;
-    }
-
-    function firstLogFor(contractId) {''',
-        1,
-    )
-    html = html.replace(
-        '''      const latest = rows.slice(-1)[0] || null;
-      const totalSla = Number(contract.totalSla''',
-        '''      const latest = rows.slice(-1)[0] || null;
-      const latestStationLog = rows.filter(logChangesStationOwner).slice(-1)[0] || latest;
-      const totalSla = Number(contract.totalSla''',
-        1,
-    )
-    html = html.replace(
-        '''      contract.status = calculateContractStatus(contract.stage, used, totalSla);
-      return contract;''',
-        '''      contract.status = calculateContractStatus(contract.stage, used, totalSla);
-      if (latestStationLog) {
-        contract.station = latestStationLog[3] || `From ${latestStationLog[4] || contract.owner || ""} >> To ${latestStationLog[5] || ""}`;
-        contract.stationOwner = latestStationLog[5] || stationParts(contract.station).to || contract.stationOwner || "";
-      }
-      return contract;''',
         1,
     )
 
@@ -8216,7 +8838,7 @@ def main():
       showLoginGateway("");
     }
 
-    function initializeAuthenticatedApplication() {
+    async function initializeAuthenticatedApplication() {
       if (authenticatedApplicationInitialized) return;
       authenticatedApplicationInitialized = true;
       initializeEditableDropdowns();
@@ -8226,7 +8848,8 @@ def main():
       setupMasterDataControls();
       loadContractsDatabase();
       renderAll();
-      loadDriveDatabaseFromCloud();
+      updateDatabaseSyncStatus("Checking Shared Drive for the latest data...");
+      await loadDriveDatabaseFromCloud({ force: true });
       startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
     }
@@ -8476,6 +9099,7 @@ def main():
     }
 
     initializeLoginGateway();
+    checkEmailEndpointHealth();
 '''
     if old_startup not in html:
         raise RuntimeError("Could not find startup block for authentication gate")
@@ -8499,6 +9123,7 @@ def main():
     .admin-rights-table td:first-child, .admin-rights-table th:first-child { white-space: nowrap; }
     .password-validation-message { min-height: 18px; color: #b42318; font-size: 11px; }
     .line-notification-config { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .line-notification-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .line-message-preview { min-width: 260px; max-width: 420px; white-space: pre-line; font-size: 10px; line-height: 1.45; }
     .line-recipient-id { max-width: 170px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
     .line-queue-status { white-space: nowrap; }
@@ -8551,13 +9176,13 @@ def main():
 
     html = html.replace(
         '''        <button class="nav-button" data-view="master" title="Master Data">
-          <span>▤</span><span class="nav-label">Master Data</span><span class="nav-count">5</span>
+          <span>▤</span><span class="nav-label">Master Data</span>
         </button>''',
         '''        <button class="nav-button" data-view="master" title="Master Data">
-          <span>▤</span><span class="nav-label">Master Data</span><span class="nav-count">5</span>
+          <span>▤</span><span class="nav-label">Master Data</span>
         </button>
         <button class="nav-button admin-tools-nav" data-view="admin" title="Admin Tools" data-admin-only hidden>
-          <span>⚙</span><span class="nav-label">Admin Tools</span><span class="nav-count">2</span>
+          <span>⚙</span><span class="nav-label">Admin Tools</span>
         </button>''',
         1,
     )
@@ -8683,25 +9308,30 @@ def main():
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="lineNotificationPanel" data-admin-only hidden>
                 <div class="panel-header">
                   <div>
-                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Local Preview</span></h2>
-                    <small>ตัวอย่างการแจ้งเตือน Status Update Y/R ไปยัง Contract Owner ยังไม่ส่งจริง</small>
+                    <h2>LINE Status Notifications <span class="badge black admin-only-badge">Production Group</span></h2>
+                    <small>แจ้งเตือน Status Update Y/R ไปยังกลุ่ม T23_Tracking Contract</small>
                   </div>
-                  <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
+                  <div class="line-notification-actions">
+                    <button class="secondary-button" type="button" id="refreshLineNotificationPreview">Refresh Preview</button>
+                    <button class="primary-button" type="button" id="sendLineNotificationsNow">Send Now / ส่งแจ้งเตือนทันที</button>
+                  </div>
                 </div>
                 <div class="line-notification-config">
                   <span class="badge amber">Trigger Y=Delayed</span>
                   <span class="badge red">Trigger R=Overdue</span>
-                  <span class="badge black">Recipient Contract Owner</span>
-                  <span class="badge green">Schedule Daily 09:00 Asia/Bangkok</span>
-                  <span class="badge black">Max 1 notification per Contract / Day</span>
+                  <span class="badge black">Recipient T23_Tracking Contract</span>
+                  <span class="badge green">Immediate after save</span>
+                  <span class="badge black">Automatic: Mon-Fri 09:30 Asia/Bangkok</span>
+                  <span class="badge black">Automatic: Max 1 per Contract / Day</span>
+                  <span class="badge red">Admin Send Now: Resend allowed</span>
                 </div>
                 <div class="table-wrap">
                   <table class="master-table">
-                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE User ID</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
+                    <thead><tr><th>Contract</th><th>Contract Owner</th><th>LINE Destination</th><th>Status Update</th><th>Message Preview</th><th>Delivery</th></tr></thead>
                     <tbody id="lineNotificationPreviewRows"></tbody>
                   </table>
                 </div>
-                <small id="lineNotificationPreviewSummary">Local Preview only</small>
+                <small id="lineNotificationPreviewSummary">Production group delivery preview</small>
               </section>
 
               <section class="panel master-data-panel master-data-panel-full admin-only-panel" id="passwordManagementPanel" data-admin-only hidden>
@@ -9299,8 +9929,6 @@ def main():
         `Contract ID: ${contract.id}`,
         `Contract Name: ${contractName}`,
         `Contract Owner: ${contract.owner || "-"}`,
-        `Total SLA: ${Number(contract.totalSla || 0)} Working Days`,
-        `Accumulated Days: ${Number(contract.used || 0)} Working Days`,
         `Due Date: ${contract.due ? formatDate(contract.due) : "-"}`,
         "",
         statusCode === "R"
@@ -9315,20 +9943,17 @@ def main():
         .map(contract => {
           const statusCode = statusCodeFor(contract.status);
           if (!["Y", "R"].includes(statusCode)) return null;
-          const ownerRecord = lineOwnerRecord(contract.owner);
-          const lineUserId = String(ownerRecord?.lineUserId || "").trim();
-          const enabled = isMasterActive(ownerRecord?.lineNotifications || "Yes");
           return {
             contractId: contract.id,
             contractName: contract.name,
             owner: contract.owner || "Unassigned",
-            lineUserId,
+            lineUserId: "T23_Tracking Contract",
             statusCode,
             statusLabel: statusCode === "R" ? "R = Overdue" : "Y = Delayed",
             confidential: isConfidentialContract(contract),
             message: lineNotificationMessage(contract, statusCode),
-            ready: Boolean(lineUserId && enabled),
-            delivery: !ownerRecord ? "Owner not found in People Master" : !enabled ? "LINE Alert disabled" : !lineUserId ? "Missing LINE User ID" : "Ready for automatic LINE"
+            ready: true,
+            delivery: "Ready for automatic LINE group"
           };
         })
         .filter(Boolean)
@@ -9350,7 +9975,7 @@ def main():
           <td class="line-queue-status"><span class="badge ${item.ready ? "green" : "amber"}">${escapeHtml(item.delivery)}</span></td>
         </tr>`).join("") : '<tr><td colspan="6">No Y/R Status Update notifications</td></tr>';
       const readyCount = queue.filter(item => item.ready).length;
-      summaryNode.textContent = `Local Preview only · ${queue.length} notification(s) · ${readyCount} ready · ${queue.length - readyCount} require LINE User ID or configuration`;
+      summaryNode.textContent = `Production group · ${queue.length} notification(s) · ${readyCount} ready · Automatic max 1 per Contract / Day · Admin resend allowed`;
     }
 
     function renderDueDateApprovalQueue() {
@@ -9641,6 +10266,29 @@ def main():
         renderLineStatusNotificationPreview();
         showToast("LINE notification preview refreshed. / อัปเดตตัวอย่างการแจ้งเตือนแล้ว");
       });
+      document.querySelector("#sendLineNotificationsNow")?.addEventListener("click", async event => {
+        if (!requireSystemAdministrator()) return;
+        const queue = buildLineStatusNotificationQueue();
+        if (!queue.length) {
+          showToast("No Y/R notifications to send. / ไม่มีรายการ Y/R ที่ต้องแจ้งเตือน");
+          return;
+        }
+        if (!window.confirm(`Force-send LINE notifications for ${queue.length} Y/R contract(s) now? Contracts already sent today will be sent again.\nยืนยันส่ง LINE สำหรับ ${queue.length} สัญญาตอนนี้ โดยเคสที่ส่งแล้ววันนี้จะถูกส่งซ้ำ?`)) return;
+        const button = event.currentTarget;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Sending... / กำลังส่ง...";
+        try {
+          const submitted = await runImmediateLineStatusNotifications({ forceSend: true, source: "adminSendNow" });
+          showToast(submitted
+            ? "Admin LINE notification request sent. Resend is allowed. / ส่งคำสั่งแจ้งเตือนโดย Admin แล้ว สามารถส่งซ้ำได้"
+            : "LINE notification request could not be sent. / ไม่สามารถส่งคำสั่งแจ้งเตือนได้");
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+          renderLineStatusNotificationPreview();
+        }
+      });
       document.querySelector("#dueApprovalQueueRows")?.addEventListener("click", event => {
         const button = event.target.closest("[data-review-due-request]");
         if (button) openDueDateApprovalRequest(button.dataset.reviewDueRequest);
@@ -9674,7 +10322,7 @@ def main():
     html = html.replace(
         '''      renderMasterData();
       syncNavCounts();''',
-        '''      if (!masterDataHasUnsavedChanges) renderMasterData();
+        '''      renderMasterData();
       renderAdministrativeControls();
       syncNavCounts();''',
         1,
@@ -9834,8 +10482,6 @@ def main():
         "Action Reason Type EN",
         "Attachments",
         "CC Recipients",
-        "Manual Days Override",
-        "Manual Alert Override",
     ]
     log_csv_rows = [
         {header: row[index] if index < len(row) else "" for index, header in enumerate(log_headers)}
@@ -9853,7 +10499,185 @@ def main():
         "Description / คำอธิบาย",
     ]
 
+    cache_control_meta = """  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">"""
+    if 'http-equiv="Cache-Control"' not in html:
+        html = html.replace('  <meta name="theme-color" content="#121212">', '  <meta name="theme-color" content="#121212">\n' + cache_control_meta)
+
+    html = html.replace(
+        '''    function calculateAlert(action, daysOnHand, sla) {
+      const numericSla = Number(sla) || 0;
+      if (action === "Signed / Completed") {
+        return "Black >>B=Completed";
+      }
+      if (action === "Cancelled") {
+        return "Black >>B=Cancelled";
+      }
+      if (daysOnHand < numericSla) {
+        return "Green >>G=On Track";
+      }
+      if (daysOnHand === numericSla) {
+        return "Yellow >>Y=Delayed";
+      }
+      return "Red >>R=At Risk";
+    }''',
+        '''    function calculateAlert(action, daysOnHand, sla) {
+      const numericSla = Number(sla) || 0;
+      const currentDays = Number(daysOnHand) || 0;
+      if (action === "Signed / Completed") {
+        return "Black >>B=Completed";
+      }
+      if (action === "Cancelled") {
+        return "Black >>B=Cancelled";
+      }
+      // Start the yellow warning one working day before the Action SLA.
+      if (currentDays < Math.max(0, numericSla - 1)) {
+        return "Green >>G=On Track";
+      }
+      if (currentDays <= numericSla) {
+        return "Yellow >>Y=Delayed";
+      }
+      return "Red >>R=At Risk";
+    }''',
+        1,
+    )
+    html = html.replace(
+        '      if (totalDays < numericSla) return "Green >>G=On Track";\n      if (totalDays === numericSla) return "Yellow >>Y=Delayed";\n      return "Red >>R=Overdue";',
+        '      if (totalDays < numericSla) return "Green >>G=On Track";\n      // Keep the contract yellow until five working days beyond Total SLA.\n      if (totalDays < numericSla + 5) return "Yellow >>Y=Delayed";\n      return "Red >>R=Overdue";',
+        1,
+    )
+    html = html.replace(
+        'code === "Y" ? "The task has reached its SLA." : ""',
+        'code === "Y" ? "The task is approaching or has reached its SLA." : ""',
+        1,
+    )
+    html = html.replace(
+        'code === "Y" ? "งานถึงกำหนด SLA" : ""',
+        'code === "Y" ? "งานใกล้ถึงหรือครบกำหนด SLA" : ""',
+        1,
+    )
+    html = add_log_action_reason_feature(html)
+    html = apply_sla_dashboard_rules(html)
+    html = add_dashboard_contract_links_and_due_request_sync(html)
+    html = html.replace(
+        '''          contract.days = Number(latestLog[9]) || 0;
+          contract.used = contractLogs.reduce((total, row) => total + Number(row[9] || 0), 0);
+          contract.balance = Number(contract.totalSla || 0) - Number(contract.used || 0);
+          contract.status = calculateContractStatus(contract.stage, contract.used, contract.totalSla);
+        } else {
+          contract.days = Number(contract.days || contract.used || 0);
+          contract.alert = calculateAlert(contract.stage, contract.days, contract.totalSla);
+          contract.status = calculateContractStatus(contract.stage, Number(contract.used || contract.days || 0), contract.totalSla);
+        }''',
+        '''        }
+        syncContractTimingFromLogs(contract);''',
+        1,
+    )
+    html = html.replace(
+        "      upsertDashboardData(contract);",
+        "      syncContractTimingFromLogs(contract);\n      upsertDashboardData(contract);",
+    )
     OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
+    # Final User Case Action guard pass. Keep this after all legacy compatibility
+    # transforms so older selector defaults cannot overwrite the blank state.
+    html = html.replace(
+        """      const contractOptions = accessibleContracts.map(item => ({
+        value: item.id,
+        label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+      }));""",
+        """      const contractOptions = [
+        { value: "", label: "Select Contract / เลือกสัญญา" },
+        ...accessibleContracts.map(item => ({
+          value: item.id,
+          label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+        }))
+      ];""",
+        1,
+    )
+    html = html.replace(
+        """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
+      fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
+      fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
+        """      fillSelect("updateContract", contractOptions, lastUserContractId || "");
+      fillSelect("closeContract", contractOptions, lastUserContractId || "");
+      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");""",
+        1,
+    )
+    html = html.replace(
+        """      setInputValueIfEmpty("addDepartment", "IT");
+      syncDepartmentOwnerOptions(false);
+      setInputValueIfEmpty("addOwner", employeesForDepartment(document.querySelector("#addDepartment")?.value)[0]?.name || "Kawinphop Champee (Boss)");
+      syncDepartmentOwnerOptions(false);
+      setInputValueIfEmpty("updateTo", "Siwaporn Iamwiboon (Grace)");""",
+        """      syncDepartmentOwnerOptions(false);""",
+        1,
+    )
+    html = html.replace(
+        """      const accessibleContracts = contractsVisibleToCurrentUser();
+      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value) || accessibleContracts[0];
+      if (!contract) return;
+      document.querySelector("#adjustDueContractSummary").innerHTML = contractSummaryMarkup(contract);""",
+        """      const accessibleContracts = contractsVisibleToCurrentUser();
+      const contract = accessibleContracts.find(item => item.id === form.elements.contractId?.value);
+      if (!contract) {
+        document.querySelector("#adjustDueContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";
+        ["adjustSystemDue", "adjustCurrentDue", "dueRequestedBy", "adjustRequestedDue"].forEach(id => {
+          const input = document.querySelector(`#${id}`);
+          if (input) input.value = "";
+        });
+        const statusBadge = document.querySelector("#dueRequestStatus");
+        if (statusBadge) {
+          statusBadge.textContent = "Ready to Request";
+          statusBadge.className = "badge blue";
+        }
+        validateRequestedDueDate();
+        return;
+      }
+      document.querySelector("#adjustDueContractSummary").innerHTML = contractSummaryMarkup(contract);""",
+        1,
+    )
+    html = html.replace(
+        """      if (!reason) {
+        document.querySelector("#dueAdjustmentReason")?.focus();
+        showToast("Please enter a reason for the Due Date adjustment request.");
+        return;
+      }
+      const request = {""",
+        """      if (!reason) {
+        document.querySelector("#dueAdjustmentReason")?.focus();
+        showToast("Please enter a reason for the Due Date adjustment request.");
+        return;
+      }
+      if (!beginUserCaseActionSubmit(formElement)) return;
+      const request = {""",
+        1,
+    )
+    html = html.replace(
+        """      renderAll();
+      setView("user");
+      syncDueDateAdjustmentForm(true);
+      showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);""",
+        """      renderAll();
+      setView("user");
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);""",
+        1,
+    )
+    html = html.replace(
+        """      const formElement = event.currentTarget;
+      if (!beginUserCaseActionSubmit(formElement)) return;
+      const form = new FormData(formElement);
+      const id = form.get("contractId");
+      const contract = contractsVisibleToCurrentUser().find(item => item.id === id);
+      if (!contract) return;""",
+        """      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
+      const id = form.get("contractId");
+      const contract = contractsVisibleToCurrentUser().find(item => item.id === id);
+      if (!contract || !beginUserCaseActionSubmit(formElement)) return;""",
+        1,
+    )
     OUTPUT_HTML.write_text(html, encoding="utf-8")
     write_csv(OUTPUT_CONTRACTS_CSV, contract_csv_rows, contract_headers)
     write_csv(OUTPUT_LOGS_CSV, log_csv_rows, log_headers)
@@ -9888,15 +10712,25 @@ const DEFAULT_BACKUP_FOLDER_ID = "{DRIVE_FOLDER_ID}";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
 
 function doPost(e) {{
+  let requestId = "";
   try {{
-    const payload = JSON.parse((e.postData && e.postData.contents) || "{{}}");
+    const rawPayload = (e.postData && e.postData.contents) || (e.parameter && e.parameter.payload) || "{{}}";
+    const payload = JSON.parse(rawPayload);
+    requestId = String(payload.requestId || "").trim();
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
-    if (mode === "sendStatusEmail") return sendStatusEmail_(payload);
+    if (mode === "sendStatusEmail") {{
+      setEmailRequestStatus_(requestId, {{ success: true, state: "processing" }});
+      const result = sendStatusEmail_(payload);
+      setEmailRequestStatus_(requestId, Object.assign({{ state: "sent" }}, result));
+      return jsonResponse(result);
+    }}
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
     if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
     return jsonResponse({{ success: true, files: [saveAttachment_(payload)] }});
   }} catch (error) {{
+    setEmailRequestStatus_(requestId, {{ success: false, state: "failed", error: errorMessage_(error) }});
+    console.error("T23 doPost failed: " + errorMessage_(error));
     return jsonResponse({{ success: false, error: errorMessage_(error) }});
   }}
 }}
@@ -9906,6 +10740,8 @@ function doGet(e) {{
   const callback = String(params.callback || "").trim();
   try {{
     if (params.mode === "loadDriveDatabase") return jsonpResponse(loadDriveDatabase_(params), callback);
+    if (params.mode === "emailRequestStatus") return jsonpResponse(emailRequestStatus_(params.requestId), callback);
+    if (params.mode === "healthCheck") return jsonpResponse(endpointHealthCheck_(), callback);
     return jsonpResponse({{
       success: true,
       message: "T23 attachment upload, status email, and Drive database endpoint is running.",
@@ -9960,6 +10796,31 @@ function saveDriveDatabase_(payload) {{
   }}
 }}
 
+function emailRequestStatus_(requestId) {{
+  const id = String(requestId || "").trim();
+  if (!id) return {{ success: false, state: "failed", error: "Missing request ID." }};
+  const cached = CacheService.getScriptCache().get("t23_email_" + id);
+  return cached ? JSON.parse(cached) : {{ success: true, state: "pending" }};
+}}
+
+function setEmailRequestStatus_(requestId, status) {{
+  const id = String(requestId || "").trim();
+  if (!id) return;
+  CacheService.getScriptCache().put("t23_email_" + id, JSON.stringify(status || {{}}), 600);
+}}
+
+function endpointHealthCheck_() {{
+  const attachmentFolder = DriveApp.getFolderById(DEFAULT_FOLDER_ID);
+  return {{
+    success: true,
+    state: "ready",
+    attachmentFolderId: attachmentFolder.getId(),
+    attachmentFolderName: attachmentFolder.getName(),
+    remainingMailQuota: MailApp.getRemainingDailyQuota(),
+    checkedAt: new Date().toISOString()
+  }};
+}}
+
 function backupDriveDatabase_(payload) {{
   const sourceFolder = DriveApp.getFolderById(payload.folderId || DEFAULT_DATABASE_FOLDER_ID);
   const backupFolder = DriveApp.getFolderById(payload.backupFolderId || DEFAULT_BACKUP_FOLDER_ID);
@@ -10012,25 +10873,34 @@ function installDailyBackupTrigger_() {{
 }}
 
 function readTextFileByName_(folder, fileName) {{
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return "";
-  return files.next().getBlob().getDataAsString("UTF-8").replace(/^\\uFEFF/, "");
+  const file = latestFileByName_(folder, fileName);
+  if (!file) return "";
+  return file.getBlob().getDataAsString("UTF-8").replace(/^\\uFEFF/, "");
+}}
+
+function latestFileByName_(folder, fileName) {{
+  const files = folder.getFilesByName(cleanFileName_(fileName));
+  let latest = null;
+  while (files.hasNext()) {{
+    const candidate = files.next();
+    if (!latest || candidate.getLastUpdated().getTime() > latest.getLastUpdated().getTime()) latest = candidate;
+  }}
+  return latest;
 }}
 
 function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, prefix) {{
   const name = cleanFileName_(fileName || "database.csv");
-  const files = sourceFolder.getFilesByName(name);
-  if (!files.hasNext()) {{
+  const sourceFile = latestFileByName_(sourceFolder, name);
+  if (!sourceFile) {{
     return {{
       sourceName: name,
       skipped: true,
       reason: "Source file not found"
     }};
   }}
-  const sourceFile = files.next();
   const backupName = cleanFileName_([prefix, stamp, name].join("_"));
   const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
-  backupFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  applyBestEffortFileSharing_(backupFile);
   return {{
     id: backupFile.getId(),
     sourceName: name,
@@ -10044,13 +10914,18 @@ function upsertTextFileByName_(folder, fileName, text) {{
   const name = cleanFileName_(fileName || "database.csv");
   const content = String(text || "");
   const files = folder.getFilesByName(name);
-  const file = files.hasNext()
-    ? files.next().setContent(content)
-    : folder.createFile(name, content, MimeType.CSV);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const matches = [];
+  while (files.hasNext()) matches.push(files.next());
+  matches.sort(function(a, b) {{ return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); }});
+  const file = matches.length ? matches[0].setContent(content) : folder.createFile(name, content, MimeType.CSV);
+  matches.slice(1).forEach(function(duplicate) {{
+    try {{ duplicate.setTrashed(true); }} catch (error) {{ console.warn("Duplicate CSV could not be trashed: " + errorMessage_(error)); }}
+  }});
+  applyBestEffortFileSharing_(file);
   return {{
     id: file.getId(),
     name: file.getName(),
+    updatedAt: file.getLastUpdated().toISOString(),
     url: file.getUrl(),
     downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId()
   }};
@@ -10079,7 +10954,7 @@ function sendStatusEmail_(payload) {{
   if (mailAttachments.length) options.attachments = mailAttachments;
 
   MailApp.sendEmail(options);
-  return jsonResponse({{
+  return {{
     success: true,
     sent: true,
     sentAt: new Date().toISOString(),
@@ -10087,7 +10962,7 @@ function sendStatusEmail_(payload) {{
     cc: cc,
     files: files,
     attachedFiles: mailAttachments.map(function(blob) {{ return blob.getName(); }})
-  }});
+  }};
 }}
 
 function normalizeCc_(value) {{
@@ -10160,7 +11035,7 @@ function saveAttachment_(payload) {{
   const mimeType = payload.mimeType || "application/octet-stream";
   const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  applyBestEffortFileSharing_(file);
   return {{
     id: file.getId(),
     fileName: file.getName(),
@@ -10171,6 +11046,21 @@ function saveAttachment_(payload) {{
     downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId(),
     reused: false
   }};
+}}
+
+function applyBestEffortFileSharing_(file) {{
+  try {{
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return "anyone";
+  }} catch (publicSharingError) {{
+    try {{
+      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+      return "domain";
+    }} catch (domainSharingError) {{
+      console.warn("File created without changing sharing policy: " + errorMessage_(domainSharingError));
+      return "existing";
+    }}
+  }}
 }}
 
 function buildEmailBody_(baseBody, files, folderUrl) {{
