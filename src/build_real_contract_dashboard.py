@@ -10719,6 +10719,381 @@ def main():
       if (confidentialNav) confidentialNav.hidden = !canViewConfidentialContracts();""",
         1,
     )
+    # Restore the Close Case recipient, attachment queue, and email hand-off.
+    html = html.replace(
+        '''                  <input type="hidden" name="owner" id="closeOwner">
+                  <input type="hidden" name="closeDate" id="closeDate">''',
+        '''                  <label class="form-field full">
+                    <span class="bilingual-label"><span>To<span class="field-required-mark" aria-hidden="true">*</span></span><span>ส่งถึง<span class="field-required-mark" aria-hidden="true">*</span></span></span>
+                    <input class="input" type="email" name="toEmail" id="closeToEmail" required placeholder="recipient@turtle23.com" autocomplete="email">
+                  </label>
+                  <div class="form-field full update-attachment-section" id="closeAttachmentSection" tabindex="-1">
+                    <div class="attachment-heading">
+                      <span class="bilingual-stack update-bilingual-label"><span class="en">Attachments</span><span class="th">ไฟล์แนบ</span></span>
+                      <span class="attachment-count bilingual-stack" id="closeAttachmentCount"><span class="en">0 files</span><span class="th">0 ไฟล์</span></span>
+                    </div>
+                    <div class="attachment-dropzone" id="closeAttachmentDropzone">
+                      <input id="closeAttachmentInput" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
+                      <button class="ghost-button compact-attach-button" type="button" id="closeAttachFilesBtn"><span class="button-bilingual"><strong>Attach Files</strong><small>แนบไฟล์</small></span></button>
+                      <span class="attachment-drop-copy bilingual-stack"><span class="en">Drop multiple files here</span><span class="th">ลากและวางไฟล์หลายไฟล์ที่นี่</span></span>
+                    </div>
+                    <div class="attachment-list" id="closeAttachmentList" hidden></div>
+                    <div class="compact-help bilingual-stack"><span class="en">Optional · Up to 10 files · 20 MB per file</span><span class="th">ไม่บังคับ · สูงสุด 10 ไฟล์ · ไฟล์ละไม่เกิน 20 MB</span></div>
+                    <div class="field-validation-error bilingual-error" id="closeAttachmentError"></div>
+                  </div>
+                  <input type="hidden" name="owner" id="closeOwner">
+                  <input type="hidden" name="closeDate" id="closeDate">''',
+        1,
+    )
+    html = html.replace(
+        '''    function setupUpdateAttachmentAndCc() {''',
+        '''    let closeAttachmentQueue = [];
+
+    function renderCloseAttachmentQueue() {
+      const list = document.querySelector("#closeAttachmentList");
+      const count = document.querySelector("#closeAttachmentCount");
+      if (count) count.innerHTML = `<span class="en">${closeAttachmentQueue.length} file${closeAttachmentQueue.length === 1 ? "" : "s"}</span><span class="th">${closeAttachmentQueue.length} ไฟล์</span>`;
+      if (!list) return;
+      list.hidden = closeAttachmentQueue.length === 0;
+      list.innerHTML = closeAttachmentQueue.map(item => `
+        <div class="attachment-row">
+          <span class="attachment-file-name" title="${escapeHtml(item.originalFileName)}">${escapeHtml(item.originalFileName)}</span>
+          <span class="attachment-file-size">${escapeHtml(formatUpdateFileSize(item.fileSize))}</span>
+          <span class="attachment-file-status">${escapeHtml(item.status || "Ready")}</span>
+          <button class="attachment-remove" type="button" data-remove-close-attachment="${escapeHtml(item.queueId)}">Remove</button>
+        </div>`).join("");
+    }
+
+    function setCloseAttachmentValidation(messageEn = "", messageTh = "") {
+      const section = document.querySelector("#closeAttachmentSection");
+      const error = document.querySelector("#closeAttachmentError");
+      if (!section || !error) return;
+      const hasError = Boolean(messageEn || messageTh);
+      section.classList.toggle("validation-error", hasError);
+      section.setAttribute("aria-invalid", String(hasError));
+      error.innerHTML = hasError ? `<span class="en">${escapeHtml(messageEn)}</span><span class="th">${escapeHtml(messageTh)}</span>` : "";
+    }
+
+    function addFilesToCloseQueue(fileList) {
+      const files = [...(fileList || [])];
+      if (!files.length) return;
+      setCloseAttachmentValidation();
+      if (closeAttachmentQueue.length + files.length > UPDATE_MAX_FILES) {
+        setCloseAttachmentValidation("You can attach up to 10 files.", "สามารถแนบไฟล์ได้สูงสุด 10 ไฟล์");
+        return;
+      }
+      const invalidType = files.find(file => {
+        const extension = updateFileExtension(file.name);
+        return UPDATE_BLOCKED_EXTENSIONS.has(extension) || !UPDATE_ALLOWED_EXTENSIONS.has(extension);
+      });
+      if (invalidType) {
+        setCloseAttachmentValidation("This file type is not allowed.", `ไม่รองรับไฟล์ ${invalidType.name}`);
+        return;
+      }
+      const oversized = files.find(file => Number(file.size) > UPDATE_MAX_FILE_SIZE);
+      if (oversized) {
+        setCloseAttachmentValidation("The file size must not exceed 20 MB.", `ขนาดไฟล์ ${oversized.name} ต้องไม่เกิน 20 MB`);
+        return;
+      }
+      const queuedAt = Date.now();
+      files.forEach((file, index) => closeAttachmentQueue.push({
+        queueId: `CLOSE-${queuedAt}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        fileName: updateStoredFileName(file.name),
+        originalFileName: file.name,
+        fileSize: Number(file.size) || 0,
+        mimeType: file.type || "application/octet-stream",
+        status: "Ready"
+      }));
+      renderCloseAttachmentQueue();
+    }
+
+    function resetCloseAttachments() {
+      closeAttachmentQueue = [];
+      const input = document.querySelector("#closeAttachmentInput");
+      if (input) input.value = "";
+      setCloseAttachmentValidation();
+      renderCloseAttachmentQueue();
+    }
+
+    function prepareCloseAttachments({ contractId, logId, action, updatedBy, uploadedAt }) {
+      return closeAttachmentQueue.map((item, index) => ({
+        fileId: `FILE-${Date.now()}-${String(index + 1).padStart(2, "0")}`,
+        fileName: item.fileName,
+        originalFileName: item.originalFileName,
+        fileSize: item.fileSize,
+        mimeType: item.mimeType,
+        contractId,
+        logId,
+        action,
+        uploadedBy: updatedBy,
+        uploadedAt,
+        status: "Ready to send",
+        url: "",
+        downloadUrl: "",
+        cloudFolderUrl: attachmentCloudConfig.folderUrl
+      }));
+    }
+
+    function setupUpdateAttachmentAndCc() {''',
+        1,
+    )
+    html = html.replace(
+        '''      renderUpdateAttachmentQueue();
+
+      const fileInput = document.querySelector("#updateAttachmentInput");''',
+        '''      renderUpdateAttachmentQueue();
+      renderCloseAttachmentQueue();
+
+      const closeFileInput = document.querySelector("#closeAttachmentInput");
+      const closeAttachButton = document.querySelector("#closeAttachFilesBtn");
+      const closeDropzone = document.querySelector("#closeAttachmentDropzone");
+      closeAttachButton?.addEventListener("click", () => closeFileInput?.click());
+      closeFileInput?.addEventListener("change", event => {
+        addFilesToCloseQueue(event.currentTarget.files);
+        event.currentTarget.value = "";
+      });
+      ["dragenter", "dragover"].forEach(type => closeDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDropzone.classList.add("is-dragover");
+      }));
+      ["dragleave", "drop"].forEach(type => closeDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDropzone.classList.remove("is-dragover");
+      }));
+      closeDropzone?.addEventListener("drop", event => addFilesToCloseQueue(event.dataTransfer?.files));
+      document.addEventListener("click", event => {
+        const removeButton = event.target.closest("[data-remove-close-attachment]");
+        if (!removeButton) return;
+        closeAttachmentQueue = closeAttachmentQueue.filter(item => item.queueId !== removeButton.dataset.removeCloseAttachment);
+        setCloseAttachmentValidation();
+        renderCloseAttachmentQueue();
+      });
+
+      const fileInput = document.querySelector("#updateAttachmentInput");''',
+        1,
+    )
+    html = html.replace(
+        '''      document.querySelector("#statusEmailSubject").value = draft.subject || "";
+      activeStatusEmailDraft = { ...draft, cc: statusEmailCcText(), ccList: statusEmailCcValues() };''',
+        '''      document.querySelector("#statusEmailSubject").value = draft.subject || "";
+      document.querySelector("#statusEmailTitle").textContent = draft.modalTitle || "Send Status Update Email";
+      activeStatusEmailDraft = { ...draft, cc: statusEmailCcText(), ccList: statusEmailCcValues() };''',
+        1,
+    )
+    html = html.replace(
+        '''      } else if (formId === "closeCaseForm") {
+        document.querySelector("#closeContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";''',
+        '''      } else if (formId === "closeCaseForm") {
+        resetCloseAttachments();
+        document.querySelector("#closeContractSummary").innerHTML = "Select a contract to view details. / เลือกสัญญาเพื่อดูรายละเอียด";''',
+        1,
+    )
+    html = html.replace(
+        '''          closeForm.elements.owner.value = closeContract.owner || "";
+          closeForm.elements.closeDate.value = todayInputValue();''',
+        '''          closeForm.elements.owner.value = closeContract.owner || "";
+          closeForm.elements.closeDate.value = todayInputValue();
+          closeForm.elements.toEmail.value = emailForPerson(closeContract.owner) || "";''',
+        1,
+    )
+    old_close_handler = '''    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
+      const id = form.get("contractId");
+      const contract = contractsVisibleToCurrentUser().find(item => item.id === id);
+      if (!contract || !beginUserCaseActionSubmit(formElement)) return;
+      const owner = String(form.get("owner") || contract.owner || "").trim();
+      const closeDate = String(form.get("closeDate") || todayInputValue());
+      const stage = form.get("stage");
+      const alert = calculateAlert(stage, 0, 0);
+      contract.stage = stage;
+      contract.owner = owner;
+      contract.status = alert;
+      contract.alert = alert;
+      contract.station = `From ${owner} >> To ${owner}`;
+      contract.days = 0;
+      contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
+      addLogRecord({
+        contractId: id,
+        cycle: contract.cycle,
+        station: contract.station,
+        from: owner,
+        to: owner,
+        inDate: closeDate,
+        outDate: closeDate,
+        sla: 0,
+        delayReason: "",
+        action: stage
+      });
+      syncContractTimingFromLogs(contract);
+      upsertDashboardData(contract);
+      selectedContractIndex = contracts.findIndex(item => item.id === id);
+      selectedLogContractId = id;
+      lastUserContractId = id;
+      saveContractsDatabase();
+      renderAll();
+      setView("user");
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${id} closed`);
+    });'''
+    new_close_handler = '''    document.querySelector("#closeCaseForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
+      const id = form.get("contractId");
+      const contract = contractsVisibleToCurrentUser().find(item => item.id === id);
+      if (!contract || !beginUserCaseActionSubmit(formElement)) return;
+      const owner = String(form.get("owner") || contract.owner || "").trim();
+      const toEmail = String(form.get("toEmail") || "").trim().toLowerCase();
+      const closeDate = String(form.get("closeDate") || todayInputValue());
+      const stage = form.get("stage");
+      const alert = calculateAlert(stage, 0, 0);
+      const updatedAt = localIsoDateTime();
+      const nextLogNo = logRecords.filter(row => row[0] === id).length + 1;
+      const logId = `LOG-${id.replace(/\\D/g, "")}-${String(nextLogNo).padStart(3, "0")}`;
+      const emailAttachments = closeAttachmentQueue.map(item => ({ ...item }));
+      const loggedAttachments = prepareCloseAttachments({
+        contractId: id,
+        logId,
+        action: stage,
+        updatedBy: currentUser.name || "Current User",
+        uploadedAt: updatedAt
+      });
+      contract.stage = stage;
+      contract.owner = owner;
+      contract.status = alert;
+      contract.alert = alert;
+      contract.station = `From ${owner} >> To ${owner}`;
+      contract.days = 0;
+      contract.balance = Math.max(0, Number(contract.totalSla || 0) - Number(contract.used || 0));
+      addLogRecord({
+        contractId: id,
+        cycle: contract.cycle,
+        station: contract.station,
+        from: owner,
+        to: owner,
+        inDate: closeDate,
+        outDate: closeDate,
+        sla: 0,
+        delayReason: "",
+        action: stage,
+        attachments: loggedAttachments,
+        updatedBy: currentUser.name || "Current User",
+        updatedAt
+      });
+      syncContractTimingFromLogs(contract);
+      upsertDashboardData(contract);
+      selectedContractIndex = contracts.findIndex(item => item.id === id);
+      selectedLogContractId = id;
+      lastUserContractId = id;
+      const outcomeEn = stage === "Cancelled" ? "Cancelled" : "Completed";
+      const outcomeTh = stage === "Cancelled" ? "ยกเลิก" : "เสร็จสมบูรณ์";
+      const emailDraft = {
+        modalTitle: "Send Close Case Email",
+        to: toEmail,
+        cc: "",
+        ccList: [],
+        subject: `[Contract Tracking] ${outcomeEn}: ${contract.id} - ${contract.name}`,
+        body: [`Contract case ${contract.id} has been closed.`, `Status: ${outcomeEn}`, `Contract Name: ${contract.name}`, `Contract Owner: ${owner || "-"}`, `Close Date: ${formatDateForEmail(closeDate)}`, "", `เคสสัญญา ${contract.id} ปิดเรียบร้อยแล้ว`, `สถานะ: ${outcomeTh}`, `ชื่อสัญญา: ${contract.name}`, `เจ้าของสัญญา: ${owner || "-"}`, `วันที่ปิด: ${formatDateForEmail(closeDate)}`].join("\\n"),
+        attachments: emailAttachments,
+        contractId: contract.id,
+        action: stage
+      };
+      saveContractsDatabase();
+      renderAll();
+      setView("user");
+      finishUserCaseActionSubmit(formElement, true);
+      showToast(`${id} closed · Email popup opened`);
+      openStatusEmailPopup(emailDraft);
+    });'''
+    if old_close_handler not in html:
+        raise RuntimeError("Close Case submit handler was not found")
+    html = html.replace(old_close_handler, new_close_handler, 1)
+    html = html.replace(
+        '''      (result.files || []).forEach(file => {
+        const match = updateAttachmentQueue.find(item =>
+          item.fileName === file.fileName || item.originalFileName === file.originalFileName
+        );
+        if (!match) return;
+        match.cloudFileId = file.id || match.cloudFileId || "";
+        match.cloudUrl = file.url || match.cloudUrl || "";
+        match.downloadUrl = file.downloadUrl || match.downloadUrl || "";
+        match.status = "Email sent";
+      });
+      renderUpdateAttachmentQueue();
+      return result;''',
+        '''      (result.files || []).forEach(file => {
+        const matches = [
+          ...updateAttachmentQueue,
+          ...(draft.attachments || [])
+        ].filter(item => item.fileName === file.fileName || item.originalFileName === file.originalFileName);
+        matches.forEach(match => {
+          match.cloudFileId = file.id || match.cloudFileId || "";
+          match.cloudUrl = file.url || match.cloudUrl || "";
+          match.downloadUrl = file.downloadUrl || match.downloadUrl || "";
+          match.status = "Email sent";
+        });
+      });
+      const savedLog = draft.contractId ? latestLogFor(draft.contractId) : null;
+      if (savedLog && Array.isArray(savedLog[31]) && draft.attachments?.length) {
+        savedLog[31].forEach(saved => {
+          const sent = draft.attachments.find(item => item.fileName === saved.fileName || item.originalFileName === saved.originalFileName);
+          if (!sent) return;
+          saved.cloudFileId = sent.cloudFileId || "";
+          saved.url = sent.cloudUrl || sent.url || "";
+          saved.downloadUrl = sent.downloadUrl || "";
+          saved.status = sent.status || "Email sent";
+        });
+        saveContractsDatabase();
+      }
+      renderUpdateAttachmentQueue();
+      renderCloseAttachmentQueue();
+      return result;''',
+        1,
+    )
+    html = html.replace(
+        '''      const showReason = Boolean(info && ["Return", "Resubmit", "Forward"].includes(action));
+      const reasonField = document.querySelector("#updateActionReasonField");
+      const reasonInput = document.querySelector("#updateActionReason");
+      const labelEn = document.querySelector("#updateActionReasonLabelEn");
+      const labelTh = document.querySelector("#updateActionReasonLabelTh");''',
+        '''      const showReason = Boolean(info);
+      const reasonRequired = Boolean(info?.required);
+      const reasonField = document.querySelector("#updateActionReasonField");
+      const reasonInput = document.querySelector("#updateActionReason");
+      const labelEn = document.querySelector("#updateActionReasonLabelEn");
+      const labelTh = document.querySelector("#updateActionReasonLabelTh");
+      const requiredEn = document.querySelector("#updateActionReasonRequiredEn");
+      const requiredTh = document.querySelector("#updateActionReasonRequiredTh");''',
+        1,
+    )
+    html = html.replace(
+        '''      if (labelEn) labelEn.textContent = info?.reasonEn || "Reason / Remark";
+      if (labelTh) labelTh.textContent = info?.reasonTh || "เหตุผล / หมายเหตุ";
+      if (helpEn) helpEn.textContent = info?.helpEn || "";''',
+        '''      if (labelEn) labelEn.textContent = info?.reasonEn || "Reason / Remark";
+      if (labelTh) labelTh.textContent = info?.reasonTh || "เหตุผล / หมายเหตุ";
+      requiredEn?.classList.toggle("is-visible", reasonRequired);
+      requiredTh?.classList.toggle("is-visible", reasonRequired);
+      if (helpEn) helpEn.textContent = info?.helpEn || (action === "Submit to Review" ? "Optional submission note." : "");''',
+        1,
+    )
+    html = html.replace(
+        '''      if (helpTh) helpTh.textContent = info?.helpTh || "";
+      if (reasonInput) {
+        reasonInput.required = showReason;
+        reasonInput.dataset.reasonRequired = showReason ? "true" : "false";''',
+        '''      if (helpTh) helpTh.textContent = info?.helpTh || (action === "Submit to Review" ? "หมายเหตุการส่งตรวจ (ไม่บังคับ)" : "");
+      if (reasonInput) {
+        reasonInput.required = reasonRequired;
+        reasonInput.dataset.reasonRequired = reasonRequired ? "true" : "false";''',
+        1,
+    )
+
     OUTPUT_HTML.write_text(html, encoding="utf-8")
     write_csv(OUTPUT_CONTRACTS_CSV, contract_csv_rows, contract_headers)
     write_csv(OUTPUT_LOGS_CSV, log_csv_rows, log_headers)
