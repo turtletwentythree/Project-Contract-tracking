@@ -547,6 +547,39 @@
       text-align: right;
     }
 
+    .horizontal-status-actions {
+      grid-column: 2 / 4;
+      display: grid;
+      grid-template-columns: repeat(var(--action-count), minmax(0, 1fr));
+      min-width: 0;
+      min-height: 28px;
+      margin-top: -4px;
+      overflow: hidden;
+      border: 1px solid #d6dfaa;
+      border-radius: 5px;
+      background: #f5f7eb;
+    }
+
+    .horizontal-status-action-segment {
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      padding: 4px 3px;
+      border-right: 1px solid #ffffff;
+      background: #e7edca;
+      color: var(--ink);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-align: center;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+
+    .horizontal-status-action-segment:last-child {
+      border-right: 0;
+    }
+
     .horizontal-status-legend {
       display: flex;
       flex-wrap: wrap;
@@ -15678,7 +15711,8 @@
       const rows = labels.map(item => {
         const yellowCount = countFn(item.value, "Y");
         const redCount = countFn(item.value, "R");
-        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount };
+        const latestActions = typeof options.latestActionsForLabel === "function" ? options.latestActionsForLabel(item.value) : [];
+        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount, latestActions };
       }).filter(row => row.total > 0)
         .sort((a, b) => b.priorityTotal - a.priorityTotal || b.redCount - a.redCount || b.yellowCount - a.yellowCount || a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
       if (!rows.length) return `<div class="empty-state">No Alert records</div>`;
@@ -15697,6 +15731,7 @@
                   ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
                 </div></div>
                 <div class="horizontal-status-total">${row.total}</div>
+                ${row.latestActions.length ? `<div class="horizontal-status-actions" style="--action-count:${row.latestActions.length}">${row.latestActions.map(item => `<span class="horizontal-status-action-segment" title="${escapeHtml(item.contractId)} · ${escapeHtml(item.action)}">${escapeHtml(item.action)}</span>`).join("")}</div>` : ""}
               </div>`;
           }).join("")}
         </div>
@@ -15885,11 +15920,21 @@
           { yellowLabel: "Delayed", redLabel: "Overdue" }
         )}`;
 
+      const latestActionsForPerson = person => {
+        return contractStatusData
+          .filter(item => (item.owner || "Unassigned") === person && ["Y", "R"].includes(item.statusCode))
+          .map(item => {
+            const contract = contracts.find(row => row.id === item.id) || {};
+            const latestLog = latestLogFor(item.id);
+            return { contractId: item.id, action: latestLog?.[12] || contract.stage || "-" };
+          });
+      };
+
       document.querySelector("#personAlertChart").innerHTML = `
         ${groupedAlertBarRows(
           mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "Overdue" }
+          { yellowLabel: "Delayed", redLabel: "Overdue", latestActionsForLabel: latestActionsForPerson }
         )}`;
 
     }
