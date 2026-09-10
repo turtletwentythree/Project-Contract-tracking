@@ -15784,6 +15784,8 @@
             department: item.department || contract.department || "-",
             contractOwner: item.owner || contract.owner || "Unassigned",
             stationOwner,
+            latestAction: latestLog?.[12] || contract.stage || "-",
+            latestReason: latestLog?.[17] || latestLog?.[11] || latestLog?.[20] || "-",
             pendingDays: Number(item.pendingDays) || 0
           };
         })
@@ -15832,6 +15834,8 @@
                     <div class="compact-contract-name">${escapeHtml(row.name)}</div>
                     <div class="compact-subline"><b>Type:</b> ${escapeHtml(row.type)}</div>
                     <div class="compact-subline"><b>Vendor:</b> ${escapeHtml(row.vendor)}</div>
+                    <div class="compact-subline"><b>Latest Action / การดำเนินการล่าสุด:</b> ${escapeHtml(row.latestAction)}</div>
+                    <div class="compact-subline"><b>Reason / เหตุผล:</b> ${escapeHtml(row.latestReason)}</div>
                   </td>
                   <td class="compact-owner-cell">
                     <div><span>Department</span><strong>${escapeHtml(row.department)}</strong></div>
