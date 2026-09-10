@@ -2,12 +2,20 @@ const DEFAULT_FOLDER_ID = "1sU2_6KlvRSWZ3Rv-9bF9AEU7PvYBF4pJ";
 const DEFAULT_DATABASE_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const DEFAULT_BACKUP_FOLDER_ID = "1JH3z-QrsjhiHxc2h8IUGKTf-jxML1igj";
 const EMAIL_SENDER_NAME = "T23 Contract Tracking";
+const LINE_CHANNEL_ACCESS_TOKEN_PROPERTY = "LINE_CHANNEL_ACCESS_TOKEN";
+const LINE_GROUP_ID_PROPERTY = "LINE_GROUP_ID";
+const LINE_WEBHOOK_KEY_PROPERTY = "LINE_WEBHOOK_KEY";
+const LINE_NOTIFICATION_TIMEZONE = "Asia/Bangkok";
+const LINE_NOTIFICATION_HOUR = 9;
+const LINE_NOTIFICATION_MINUTE = 30;
+const LINE_NOTIFICATION_HANDLER = "runLineStatusNotificationsScheduled";
 
 function doPost(e) {
   let requestId = "";
   try {
     const rawPayload = (e.postData && e.postData.contents) || (e.parameter && e.parameter.payload) || "{}";
     const payload = JSON.parse(rawPayload);
+    if (Array.isArray(payload.events)) return jsonResponse(handleLineWebhook_(payload, e));
     requestId = String(payload.requestId || "").trim();
     const mode = payload.mode || (payload.to ? "sendStatusEmail" : "uploadAttachment");
     if (mode === "sendStatusEmail") {
@@ -16,6 +24,9 @@ function doPost(e) {
       setEmailRequestStatus_(requestId, Object.assign({ state: "sent" }, result));
       return jsonResponse(result);
     }
+    if (mode === "sendLineStatusNotification") return jsonResponse(sendLineStatusNotification_(payload));
+    if (mode === "runLineStatusNotifications") return jsonResponse(runLineStatusNotifications(payload));
+    if (mode === "installLineStatusNotificationTrigger") return jsonResponse(installLineStatusNotificationTrigger_());
     if (mode === "saveDriveDatabase") return saveDriveDatabase_(payload);
     if (mode === "backupDriveDatabase") return backupDriveDatabase_(payload);
     if (mode === "installDailyBackup") return installDailyBackupTrigger_(payload);
@@ -61,13 +72,39 @@ function setEmailRequestStatus_(requestId, status) {
 
 function endpointHealthCheck_() {
   const attachmentFolder = DriveApp.getFolderById(DEFAULT_FOLDER_ID);
+  const scriptProperties = PropertiesService.getScriptProperties();
   return {
     success: true,
     state: "ready",
     attachmentFolderId: attachmentFolder.getId(),
     attachmentFolderName: attachmentFolder.getName(),
     remainingMailQuota: MailApp.getRemainingDailyQuota(),
+    lineConfigured: Boolean(scriptProperties.getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY)),
+    lineGroupConfigured: Boolean(scriptProperties.getProperty(LINE_GROUP_ID_PROPERTY)),
+    lineWebhookConfigured: Boolean(scriptProperties.getProperty(LINE_WEBHOOK_KEY_PROPERTY)),
     checkedAt: new Date().toISOString()
+  };
+}
+
+function handleLineWebhook_(payload, event) {
+  const properties = PropertiesService.getScriptProperties();
+  const expectedKey = String(properties.getProperty(LINE_WEBHOOK_KEY_PROPERTY) || "").trim();
+  const providedKey = String(event && event.parameter && event.parameter.key || "").trim();
+  if (!expectedKey || providedKey !== expectedKey) throw new Error("Invalid LINE webhook key.");
+
+  let groupCaptured = false;
+  (payload.events || []).forEach(function(lineEvent) {
+    const source = lineEvent && lineEvent.source || {};
+    const groupId = source.type === "group" ? String(source.groupId || "").trim() : "";
+    if (!groupId) return;
+    properties.setProperty(LINE_GROUP_ID_PROPERTY, groupId);
+    properties.setProperty("LINE_GROUP_ID_CAPTURED_AT", new Date().toISOString());
+    groupCaptured = true;
+  });
+  return {
+    success: true,
+    received: (payload.events || []).length,
+    groupCaptured: groupCaptured
   };
 }
 
@@ -165,22 +202,31 @@ function installDailyBackupTrigger_() {
 }
 
 function readTextFileByName_(folder, fileName) {
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return "";
-  return files.next().getBlob().getDataAsString("UTF-8").replace(/^\uFEFF/, "");
+  const file = latestFileByName_(folder, fileName);
+  if (!file) return "";
+  return file.getBlob().getDataAsString("UTF-8").replace(/^\uFEFF/, "");
+}
+
+function latestFileByName_(folder, fileName) {
+  const files = folder.getFilesByName(cleanFileName_(fileName));
+  let latest = null;
+  while (files.hasNext()) {
+    const candidate = files.next();
+    if (!latest || candidate.getLastUpdated().getTime() > latest.getLastUpdated().getTime()) latest = candidate;
+  }
+  return latest;
 }
 
 function backupTextFileByName_(sourceFolder, backupFolder, fileName, stamp, prefix) {
   const name = cleanFileName_(fileName || "database.csv");
-  const files = sourceFolder.getFilesByName(name);
-  if (!files.hasNext()) {
+  const sourceFile = latestFileByName_(sourceFolder, name);
+  if (!sourceFile) {
     return {
       sourceName: name,
       skipped: true,
       reason: "Source file not found"
     };
   }
-  const sourceFile = files.next();
   const backupName = cleanFileName_([prefix, stamp, name].join("_"));
   const backupFile = backupFolder.createFile(backupName, sourceFile.getBlob().getDataAsString("UTF-8"), MimeType.CSV);
   applyBestEffortFileSharing_(backupFile);
@@ -197,13 +243,18 @@ function upsertTextFileByName_(folder, fileName, text) {
   const name = cleanFileName_(fileName || "database.csv");
   const content = String(text || "");
   const files = folder.getFilesByName(name);
-  const file = files.hasNext()
-    ? files.next().setContent(content)
-    : folder.createFile(name, content, MimeType.CSV);
+  const matches = [];
+  while (files.hasNext()) matches.push(files.next());
+  matches.sort(function(a, b) { return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); });
+  const file = matches.length ? matches[0].setContent(content) : folder.createFile(name, content, MimeType.CSV);
+  matches.slice(1).forEach(function(duplicate) {
+    try { duplicate.setTrashed(true); } catch (error) { console.warn("Duplicate CSV could not be trashed: " + errorMessage_(error)); }
+  });
   applyBestEffortFileSharing_(file);
   return {
     id: file.getId(),
     name: file.getName(),
+    updatedAt: file.getLastUpdated().toISOString(),
     url: file.getUrl(),
     downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId()
   };
@@ -241,6 +292,647 @@ function sendStatusEmail_(payload) {
     files: files,
     attachedFiles: mailAttachments.map(function(blob) { return blob.getName(); })
   };
+}
+
+function sendLineStatusNotification_(payload) {
+  const to = String(payload.to || payload.lineUserId || "").trim();
+  const message = String(payload.message || "").trim();
+  if (!to) throw new Error("Missing LINE User ID.");
+  if (!message) throw new Error("Missing LINE notification message.");
+  return pushLineMessage_(to, message);
+}
+
+function pushLineMessage_(to, message) {
+  const token = String(PropertiesService.getScriptProperties().getProperty(LINE_CHANNEL_ACCESS_TOKEN_PROPERTY) || "").trim();
+  if (!token) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured in Script Properties.");
+  const messages = Array.isArray(message) ? message : [message];
+  const normalizedMessages = messages.map(function(item) {
+    if (item && typeof item === "object") return item;
+    return { type: "text", text: String(item || "").slice(0, 5000) };
+  });
+  const response = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + token },
+    payload: JSON.stringify({
+      to: String(to || "").trim(),
+      messages: normalizedMessages
+    }),
+    muteHttpExceptions: true
+  });
+  const responseCode = response.getResponseCode();
+  if (responseCode < 200 || responseCode >= 300) {
+    throw new Error("LINE Messaging API returned HTTP " + responseCode + ": " + response.getContentText());
+  }
+  return {
+    success: true,
+    sent: true,
+    sentAt: new Date().toISOString(),
+    to: String(to || "").trim()
+  };
+}
+
+function runLineStatusNotifications(options) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: true, sent: 0, skipped: 0, failed: 0, busy: true, reason: "Another LINE notification run is in progress." };
+  }
+  try {
+    return runLineStatusNotificationsUnlocked_(options);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function runLineStatusNotificationsUnlocked_(options) {
+  const settings = options || {};
+  const dryRun = settings.dryRun === true || String(settings.dryRun || "").toLowerCase() === "true";
+  const forceSend = settings.forceSend === true || String(settings.forceSend || "").toLowerCase() === "true";
+  const folder = DriveApp.getFolderById(settings.folderId || DEFAULT_DATABASE_FOLDER_ID);
+  const contracts = csvObjects_(readTextFileByName_(folder, settings.contractsCsv || "tracking_contracts_contracts_db.csv"));
+  const logs = csvObjects_(readTextFileByName_(folder, settings.logsCsv || "tracking_contracts_log_db.csv"));
+  const latestLogs = latestLineLogMap_(logs);
+  const people = csvObjects_(readTextFileByName_(folder, settings.peopleMasterCsv || "tracking_contracts_people_master_db.csv"));
+  const owners = lineOwnerMap_(people);
+  const properties = PropertiesService.getScriptProperties();
+  const lineGroupId = String(properties.getProperty(LINE_GROUP_ID_PROPERTY) || "").trim();
+  const today = Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd");
+  const results = [];
+  const candidates = [];
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  contracts.forEach(function(contract) {
+    if (lineContractIsClosed_(contract)) return;
+    const accumulatedDays = lineDashboardPendingDays_(contract);
+    const statusCode = lineContractStatusCode_(contract, accumulatedDays);
+    if (statusCode !== "Y" && statusCode !== "R") return;
+
+    const contractId = String(contract["Contract ID"] || "").trim();
+    const latestLog = latestLogs[contractId] || {};
+    const ownerName = String(contract["Contract Owner"] || "").trim();
+    const owner = owners[normalizeLineLookup_(ownerName)] || null;
+    const lineUserId = String(owner && (owner.lineUserId || owner["LINE User ID"]) || "").trim();
+    const lineEnabled = owner && masterFlagEnabled_(owner.lineNotifications || owner["LINE Alert"] || "Yes");
+    const lineRecipient = lineGroupId || lineUserId;
+    const recipientType = lineGroupId ? "group" : "owner";
+    const dedupeKey = "t23_line_status_" + contractId;
+    const dedupeValue = today;
+
+    if (!contractId) {
+      skipped += 1;
+      results.push({ contractId: "", statusCode: statusCode, sent: false, reason: "Missing Contract ID." });
+      return;
+    }
+    if (!lineGroupId && !owner) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Contract Owner not found in People Master." });
+      return;
+    }
+    if (!lineGroupId && !lineEnabled) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "LINE Alert disabled for Contract Owner." });
+      return;
+    }
+    if (!lineRecipient) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "Missing LINE Group ID or LINE User ID." });
+      return;
+    }
+    // A contract can generate at most one LINE notification per calendar day.
+    if (!dryRun && !forceSend && properties.getProperty(dedupeKey) === dedupeValue) {
+      skipped += 1;
+      results.push({ contractId: contractId, statusCode: statusCode, sent: false, reason: "This contract was already sent today." });
+      return;
+    }
+
+    candidates.push({
+      contract: contract,
+      contractId: contractId,
+      statusCode: statusCode,
+      ownerName: ownerName || "Unassigned",
+      pendingDays: accumulatedDays,
+      totalSla: Number(contract["Total SLA"] || 0) || 0,
+      vendor: String(contract["Vendor / Counter party"] || contract.Vendor || "-").trim() || "-",
+      action: String(latestLog["Action Name EN"] || latestLog.Action || contract.Stage || "-").trim() || "-",
+      reason: String(latestLog["Action Reason Detail"] || latestLog["Action Reason"] || latestLog["Delay Reason"] || latestLog["Corrective Action Detail"] || "-").trim() || "-",
+      to: lineRecipient,
+      recipientType: recipientType,
+      dedupeKey: dedupeKey,
+      dedupeValue: dedupeValue
+    });
+  });
+
+  const batches = lineFlexNotificationBatches_(candidates);
+  if (dryRun) {
+    candidates.forEach(function(candidate) {
+      results.push({
+        contractId: candidate.contractId,
+        statusCode: candidate.statusCode,
+        sent: false,
+        dryRun: true,
+        to: candidate.to,
+        recipientType: candidate.recipientType,
+        day: candidate.pendingDays,
+        totalSla: candidate.totalSla,
+        format: "flex"
+      });
+    });
+  } else {
+    batches.forEach(function(batch) {
+      try {
+        pushLineMessage_(batch.to, batch.messages || batch.message);
+        batch.candidates.forEach(function(candidate) {
+          properties.setProperty(candidate.dedupeKey, candidate.dedupeValue);
+          sent += 1;
+          results.push({
+            contractId: candidate.contractId,
+            statusCode: candidate.statusCode,
+            sent: true,
+            to: candidate.to,
+            recipientType: candidate.recipientType,
+            day: candidate.pendingDays,
+            totalSla: candidate.totalSla,
+            format: "flex"
+          });
+        });
+      } catch (error) {
+        batch.candidates.forEach(function(candidate) {
+          failed += 1;
+          results.push({ contractId: candidate.contractId, statusCode: candidate.statusCode, sent: false, reason: errorMessage_(error) });
+        });
+      }
+    });
+  }
+
+  return {
+    success: failed === 0,
+    dryRun: dryRun,
+    forceSend: forceSend,
+    sent: sent,
+    skipped: skipped,
+    failed: failed,
+    checked: results.length,
+    flexBatches: batches.length,
+    flexMessages: batches.reduce(function(total, batch) { return total + ((batch.messages && batch.messages.length) || 1); }, 0),
+    runAt: new Date().toISOString(),
+    results: results
+  };
+}
+
+function latestLineLogMap_(logs) {
+  const latest = {};
+  (logs || []).forEach(function(log) {
+    const contractId = String(log["Contract ID"] || "").trim();
+    if (contractId) latest[contractId] = log;
+  });
+  return latest;
+}
+
+function lineFlexNotificationBatches_(candidates) {
+  const byRecipient = {};
+  (candidates || []).forEach(function(candidate) {
+    const key = candidate.to;
+    if (!byRecipient[key]) byRecipient[key] = { recipientType: candidate.recipientType, candidates: [] };
+    byRecipient[key].candidates.push(candidate);
+  });
+
+  const batches = [];
+  Object.keys(byRecipient).forEach(function(to) {
+    const recipient = byRecipient[to];
+    const grouped = {};
+    recipient.candidates.forEach(function(candidate) {
+      const groupKey = candidate.statusCode + "|" + candidate.ownerName;
+      if (!grouped[groupKey]) grouped[groupKey] = { statusCode: candidate.statusCode, ownerName: candidate.ownerName, candidates: [] };
+      grouped[groupKey].candidates.push(candidate);
+    });
+
+    const pages = [];
+    Object.keys(grouped).sort().forEach(function(groupKey) {
+      const group = grouped[groupKey];
+      group.candidates.sort(function(a, b) {
+        return Number(b.pendingDays || 0) - Number(a.pendingDays || 0) || a.contractId.localeCompare(b.contractId);
+      });
+      const pageCount = Math.ceil(group.candidates.length / 4);
+      for (let index = 0; index < group.candidates.length; index += 4) {
+        const pageCandidates = group.candidates.slice(index, index + 4);
+        pages.push({
+          bubble: lineFlexStatusBubble_(group.statusCode, group.ownerName, pageCandidates, Math.floor(index / 4) + 1, pageCount, recipient.candidates),
+          candidates: pageCandidates
+        });
+      }
+    });
+
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 10) {
+      const pageChunk = pages.slice(pageIndex, pageIndex + 10);
+      const batchCandidates = [];
+      pageChunk.forEach(function(page) { Array.prototype.push.apply(batchCandidates, page.candidates); });
+      const statusCodes = {};
+      batchCandidates.forEach(function(candidate) { statusCodes[candidate.statusCode] = true; });
+      const statusText = Object.keys(statusCodes).sort().join("/");
+      const tableMessage = {
+        type: "flex",
+        altText: "[" + statusText + "] Contract Status Update - " + batchCandidates.length + " contract(s)",
+        contents: { type: "carousel", contents: pageChunk.map(function(page) { return page.bubble; }) }
+      };
+      const messages = [tableMessage];
+      if (pageIndex + 10 >= pages.length) messages.push(lineFlexOwnerStatusSummaryMessage_(recipient.candidates));
+      batches.push({
+        to: to,
+        recipientType: recipient.recipientType,
+        candidates: batchCandidates,
+        messages: messages
+      });
+    }
+  });
+  return batches;
+}
+
+function lineFlexOwnerStatusSummaryMessage_(candidates) {
+  const grouped = {};
+  (candidates || []).forEach(function(candidate) {
+    const ownerName = candidate.ownerName || "Unassigned";
+    if (!grouped[ownerName]) grouped[ownerName] = { ownerName: ownerName, delayed: 0, risk: 0, actions: [] };
+    if (candidate.statusCode === "Y") grouped[ownerName].delayed += 1;
+    if (candidate.statusCode === "R") grouped[ownerName].risk += 1;
+    grouped[ownerName].actions.push({ contractId: candidate.contractId, action: candidate.action || "-" });
+  });
+  const owners = Object.keys(grouped).map(function(key) { return grouped[key]; }).sort(function(a, b) {
+    return (b.delayed + b.risk) - (a.delayed + a.risk) || b.risk - a.risk || a.ownerName.localeCompare(b.ownerName);
+  });
+  const maxTotal = Math.max.apply(null, owners.map(function(owner) { return owner.delayed + owner.risk; }).concat([1]));
+  const bubbles = [];
+  for (let index = 0; index < owners.length; index += 6) {
+    bubbles.push(lineFlexOwnerStatusSummaryBubble_(owners.slice(index, index + 6), maxTotal, Math.floor(index / 6) + 1, Math.ceil(owners.length / 6)));
+  }
+  return {
+    type: "flex",
+    altText: "By Person - Station Owner Summary - Delayed and Overdue",
+    contents: { type: "carousel", contents: bubbles }
+  };
+}
+
+function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCount) {
+  const rows = [];
+  (owners || []).forEach(function(owner, index) {
+    if (index) rows.push({ type: "separator", color: "#ECEEEF", margin: "md" });
+    const ownerContents = [
+      { type: "text", text: lineFlexText_(owner.ownerName, 80), size: "xs", weight: "bold", color: "#202124", wrap: true, maxLines: 2 },
+      { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", cornerRadius: "md", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
+    ].concat(lineFlexOwnerActionRows_(owner.actions));
+    rows.push({
+      type: "box",
+      layout: "vertical",
+      margin: index ? "md" : "none",
+      contents: ownerContents
+    });
+  });
+  return {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      backgroundColor: "#F5F6F7",
+      contents: [
+        { type: "text", text: "By Person — Station Owner Summary", size: "lg", weight: "bold", color: "#202124", wrap: true },
+        { type: "text", text: "สรุปสถานะตาม Station Owner", size: "xs", color: "#6F7478", margin: "sm" }
+      ]
+    },
+    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: rows },
+    footer: {
+      type: "box",
+      layout: "horizontal",
+      paddingAll: "12px",
+      contents: [
+        { type: "text", text: "Y = Delayed", size: "xxs", color: "#C58A00", weight: "bold", flex: 1 },
+        { type: "text", text: "R = Overdue", size: "xxs", color: "#CE3D34", weight: "bold", flex: 1 },
+        { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Summary", size: "xxs", color: "#777C80", align: "end", flex: 1 }
+      ]
+    }
+  };
+}
+
+function lineFlexOwnerActionRows_(actions) {
+  const rows = [];
+  const items = actions || [];
+  for (let index = 0; index < items.length; index += 5) {
+    rows.push({
+      type: "box",
+      layout: "horizontal",
+      height: "30px",
+      margin: "xs",
+      spacing: "xs",
+      contents: items.slice(index, index + 5).map(function(item) {
+        return {
+          type: "box",
+          layout: "vertical",
+          flex: 1,
+          paddingAll: "4px",
+          backgroundColor: "#E7EDCA",
+          cornerRadius: "sm",
+          justifyContent: "center",
+          contents: [{ type: "text", text: lineFlexText_(item.action, 30), size: "xxs", color: "#202124", weight: "bold", align: "center", wrap: true, maxLines: 2 }]
+        };
+      })
+    });
+  }
+  return rows;
+}
+
+function lineFlexOwnerStatusBar_(owner, maxTotal) {
+  const contents = [];
+  if (owner.delayed > 0) contents.push({
+    type: "box", layout: "vertical", flex: owner.delayed, backgroundColor: "#C58A00", justifyContent: "center",
+    contents: [{ type: "text", text: String(owner.delayed), size: "xxs", color: "#FFFFFF", weight: "bold", align: "center" }]
+  });
+  if (owner.risk > 0) contents.push({
+    type: "box", layout: "vertical", flex: owner.risk, backgroundColor: "#CE3D34", justifyContent: "center",
+    contents: [{ type: "text", text: String(owner.risk), size: "xxs", color: "#FFFFFF", weight: "bold", align: "center" }]
+  });
+  const remainder = Math.max(0, maxTotal - owner.delayed - owner.risk);
+  if (remainder > 0) contents.push({ type: "box", layout: "vertical", flex: remainder, contents: [] });
+  return contents;
+}
+
+function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber, pageCount, allCandidates) {
+  const isOverdue = statusCode === "R";
+  const statusEnglish = isOverdue ? "Overdue Contracts" : "Delayed Contracts";
+  const statusThai = isOverdue ? "สัญญาที่เกินกำหนด" : "สัญญาที่ถึงช่วงติดตาม";
+  const accent = isOverdue ? "#C62828" : "#C88A00";
+  const soft = isOverdue ? "#FFF0F0" : "#FFF8E1";
+  const statusTotal = (allCandidates || []).filter(function(candidate) { return candidate.statusCode === statusCode; }).length;
+  const rows = [];
+  rows.push(lineFlexTableHeader_());
+  pageCandidates.forEach(function(candidate) {
+    rows.push({ type: "separator", color: "#ECEEEF" });
+    rows.push(lineFlexContractRow_(candidate, accent, isOverdue));
+  });
+  return {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "horizontal",
+      backgroundColor: soft,
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 1,
+          contents: [
+            { type: "text", text: "[" + statusCode + "] " + statusEnglish, color: accent, weight: "bold", size: "lg" },
+            { type: "text", text: statusThai, color: accent, size: "xs", margin: "sm" }
+          ]
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          width: "40px",
+          flex: 0,
+          backgroundColor: accent,
+          cornerRadius: "md",
+          paddingAll: "6px",
+          justifyContent: "center",
+          contents: [{ type: "text", text: String(statusTotal), color: "#FFFFFF", weight: "bold", size: "sm", align: "center" }]
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "0px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          paddingAll: "14px",
+          contents: [
+            { type: "text", text: "CONTRACT OWNER", color: "#777C80", size: "xxs", weight: "bold" },
+            { type: "text", text: lineFlexText_(ownerName, 80), color: "#202124", size: "sm", weight: "bold", margin: "sm", wrap: true }
+          ]
+        },
+        { type: "separator", color: "#DDE1E4" },
+        { type: "box", layout: "vertical", contents: rows }
+      ]
+    },
+    footer: {
+      type: "box",
+      layout: "horizontal",
+      paddingAll: "12px",
+      contents: [
+        { type: "text", text: pageCount > 1 ? pageNumber + "/" + pageCount : "Status Summary", size: "xxs", color: "#777C80", align: "end" }
+      ]
+    }
+  };
+}
+
+function lineFlexTableHeader_() {
+  return {
+    type: "box",
+    layout: "horizontal",
+    backgroundColor: "#F5F6F7",
+    paddingAll: "9px",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: "CONTRACT ID", size: "xxs", color: "#777C80", weight: "bold", flex: 3 },
+      { type: "text", text: "CONTRACT NAME", size: "xxs", color: "#777C80", weight: "bold", flex: 5 },
+      { type: "text", text: "DAYS", size: "xxs", color: "#777C80", weight: "bold", align: "end", flex: 2 },
+      { type: "text", text: "DUE DATE", size: "xxs", color: "#777C80", weight: "bold", align: "end", flex: 3 }
+    ]
+  };
+}
+
+function lineFlexContractRow_(candidate, accent, showOverdueDetails) {
+  const contract = candidate.contract || {};
+  const confidential = /confidential|สัญญาลับ/i.test([contract["Access Level"], contract.Visibility, contract.Category].join(" "));
+  const contractName = confidential ? "Confidential Contract / สัญญาลับ" : String(contract["Contract Name"] || "-");
+  const vendor = confidential ? "Restricted / จำกัดสิทธิ์" : candidate.vendor;
+  const reason = confidential ? "Restricted / จำกัดสิทธิ์" : candidate.reason;
+  const contents = [{
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: lineFlexText_(candidate.contractId, 28), size: "xxs", color: "#1667A8", weight: "bold", wrap: true, flex: 3 },
+      { type: "text", text: lineFlexText_(contractName, 100), size: "xxs", color: "#202124", weight: "bold", wrap: true, maxLines: 3, flex: 5 },
+      { type: "text", text: String(Number(candidate.pendingDays || 0)), size: "xxs", color: accent, weight: "bold", align: "end", flex: 2 },
+      { type: "text", text: lineFlexText_(contract["Due Date"] || "-", 20), size: "xxs", color: "#4D5357", align: "end", wrap: true, flex: 3 }
+    ]
+  }];
+  if (showOverdueDetails) {
+    contents.push({ type: "text", text: "Vendor: " + lineFlexText_(vendor, 80), size: "xxs", color: "#4D5357", margin: "sm", wrap: true, maxLines: 2 });
+    contents.push({ type: "text", text: "Action: " + lineFlexText_(candidate.action, 60), size: "xxs", color: "#202124", margin: "xs", weight: "bold", wrap: true, maxLines: 2 });
+    contents.push({ type: "text", text: "Reason: " + lineFlexText_(reason, 140), size: "xxs", color: "#4D5357", margin: "xs", wrap: true, maxLines: 3 });
+  }
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "10px",
+    contents: contents
+  };
+}
+
+function lineFlexText_(value, limit) {
+  return String(value == null ? "" : value).replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, limit || 100);
+}
+
+function lineDashboardPendingDays_(contract) {
+  const source = contract || {};
+  const start = lineDateOnly_(source["Add Case Date"]);
+  const end = lineDateOnly_(Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "yyyy-MM-dd"));
+  if (!start || !end || end.getTime() <= start.getTime()) return start ? 0 : Number(source["Days Used"] || source["Days on Hand"] || 0) || 0;
+  let workingDays = 0;
+  const cursor = new Date(start.getTime());
+  cursor.setUTCDate(cursor.getUTCDate() + 1);
+  while (cursor.getTime() <= end.getTime()) {
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) workingDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return workingDays;
+}
+
+function lineDateOnly_(value) {
+  const text = String(value || "").trim();
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) return lineUtcDate_(match[1], match[2], match[3]);
+  match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) return lineUtcDate_(match[3], match[2], match[1]);
+  return null;
+}
+
+function lineUtcDate_(year, month, day) {
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
+  return date;
+}
+
+function previewLineStatusNotifications() {
+  return runLineStatusNotifications({ dryRun: true });
+}
+
+function runLineStatusNotificationsScheduled() {
+  const weekday = Number(Utilities.formatDate(new Date(), LINE_NOTIFICATION_TIMEZONE, "u"));
+  if (weekday > 5) {
+    return {
+      success: true,
+      scheduled: true,
+      skippedWeekend: true,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      runAt: new Date().toISOString()
+    };
+  }
+  return runLineStatusNotifications({ source: "weekdayFallback0930" });
+}
+
+function installLineStatusNotificationTrigger() {
+  return installLineStatusNotificationTrigger_();
+}
+
+function installLineStatusNotificationTrigger_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (!trigger.getHandlerFunction) return;
+    const handler = trigger.getHandlerFunction();
+    if (handler === LINE_NOTIFICATION_HANDLER || handler === "runLineStatusNotifications") ScriptApp.deleteTrigger(trigger);
+  });
+  const trigger = ScriptApp.newTrigger(LINE_NOTIFICATION_HANDLER)
+    .timeBased()
+    .everyDays(1)
+    .atHour(LINE_NOTIFICATION_HOUR)
+    .nearMinute(LINE_NOTIFICATION_MINUTE)
+    .inTimezone(LINE_NOTIFICATION_TIMEZONE)
+    .create();
+  return {
+    success: true,
+    installed: true,
+    handlerFunction: trigger.getHandlerFunction(),
+    hour: LINE_NOTIFICATION_HOUR,
+    minute: LINE_NOTIFICATION_MINUTE,
+    timezone: LINE_NOTIFICATION_TIMEZONE,
+    weekdaysOnly: true
+  };
+}
+
+function csvObjects_(text) {
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  if (!source.trim()) return [];
+  const rows = Utilities.parseCsv(source);
+  if (!rows.length) return [];
+  const headers = rows.shift().map(function(header) { return String(header || "").trim(); });
+  return rows.filter(function(row) {
+    return row.some(function(value) { return String(value || "").trim(); });
+  }).map(function(row) {
+    const object = {};
+    headers.forEach(function(header, index) { object[header] = row[index] == null ? "" : row[index]; });
+    return object;
+  });
+}
+
+function lineOwnerMap_(people) {
+  const map = {};
+  (people || []).forEach(function(person) {
+    const key = normalizeLineLookup_(person.name || person.Name);
+    if (key && masterFlagEnabled_(person.active || person.Active || "Yes")) map[key] = person;
+  });
+  return map;
+}
+
+function normalizeLineLookup_(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function masterFlagEnabled_(value) {
+  return !/^(no|false|0|inactive|disabled)$/i.test(String(value == null ? "Yes" : value).trim());
+}
+
+function lineContractIsClosed_(contract) {
+  const text = [contract.Stage, contract["Status Update"]].join(" ");
+  return /\b(cancelled|completed|signed)\b/i.test(text) || lineStatusCode_(contract["Status Update"]) === "B";
+}
+
+function lineStatusCode_(value) {
+  const text = String(value || "").trim();
+  if (/\b(cancelled|completed|signed)\b/i.test(text) || /(^|[^A-Z])B\s*=/i.test(text)) return "B";
+  if (/\boverdue\b|\bred\b/i.test(text) || /(^|[^A-Z])R\s*=/i.test(text)) return "R";
+  if (/\bdelayed\b|\byellow\b/i.test(text) || /(^|[^A-Z])Y\s*=/i.test(text)) return "Y";
+  return "G";
+}
+
+function lineContractStatusCode_(contract, accumulatedDays) {
+  const source = contract || {};
+  if (lineContractIsClosed_(source)) return "B";
+  const totalSla = Number(source["Total SLA"] || 0) || 0;
+  if (totalSla <= 0) return lineStatusCode_(source["Status Update"]);
+  const totalDays = Math.max(0, Number(accumulatedDays || 0) || 0);
+  if (totalDays < totalSla) return "G";
+  if (totalDays < totalSla + 5) return "Y";
+  return "R";
+}
+
+function lineNotificationMessage_(contract, statusCode) {
+  const confidential = /confidential|สัญญาลับ/i.test([contract["Access Level"], contract.Visibility, contract.Category].join(" "));
+  const statusEnglish = statusCode === "R" ? "Overdue" : "Delayed";
+  const statusThai = statusCode === "R" ? "เกิน SLA รวม" : "ถึงช่วงติดตาม SLA รวม";
+  const contractName = confidential ? "Confidential Contract / สัญญาลับ" : String(contract["Contract Name"] || "-");
+  return [
+    "[" + statusCode + "] Contract Status Update: " + statusEnglish,
+    "สถานะสัญญา: " + statusThai,
+    "",
+    "Contract ID: " + String(contract["Contract ID"] || "-"),
+    "Contract Name: " + contractName,
+    "Contract Owner: " + String(contract["Contract Owner"] || "-"),
+    "Due Date: " + String(contract["Due Date"] || "-"),
+    "",
+    statusCode === "R"
+      ? "Please update the action plan immediately. / กรุณาอัปเดตแผนดำเนินการทันที"
+      : "Please review and update the contract status. / กรุณาตรวจสอบและอัปเดตสถานะสัญญา"
+  ].join("\n");
 }
 
 function normalizeCc_(value) {
