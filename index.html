@@ -14985,39 +14985,42 @@
     }
 
     async function initializeAuthenticatedApplication() {
-      if (authenticatedApplicationInitialized) return;
-      authenticatedApplicationInitialized = true;
-      initializeEditableDropdowns();
-      setupUpdateAttachmentAndCc();
-      setCaseActionStep("add");
-      setupCsvDatabaseControls();
-      setupMasterDataControls();
-      setupAdministrativeControls();
-      loadContractsDatabase();
-      renderAll();
+      if (!authenticatedApplicationInitialized) {
+        authenticatedApplicationInitialized = true;
+        initializeEditableDropdowns();
+        setupUpdateAttachmentAndCc();
+        setCaseActionStep("add");
+        setupCsvDatabaseControls();
+        setupMasterDataControls();
+        setupAdministrativeControls();
+        loadContractsDatabase();
+        renderAll();
+      }
       updateDatabaseSyncStatus("Checking Shared Drive for the latest data...");
-      await loadDriveDatabaseFromCloud({ force: true });
+      const cloudLoaded = await loadDriveDatabaseFromCloud({ force: true });
       startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
+      return cloudLoaded;
     }
 
-    function enterAuthenticatedApplication(session, restoreRoute = false) {
+    async function enterAuthenticatedApplication(session, restoreRoute = false) {
       currentUser = buildCurrentUser(session.username, session.role);
       if (!currentUser) {
         clearStoredSession();
         showLoginGateway("");
-        return;
+        return false;
       }
-      document.body.classList.remove("auth-locked");
-      document.body.classList.add("auth-ready");
       updateProfileDisplay();
       applyRoleAccess();
-      initializeAuthenticatedApplication();
+      await initializeAuthenticatedApplication();
+      document.body.classList.remove("auth-locked");
+      document.body.classList.add("auth-ready");
       applyRoleAccess();
       renderAll();
       scheduleSessionExpiry();
       updateSessionActivity(true);
       setView(restoreRoute ? currentRouteView() : "dashboard", { replaceRoute: true });
+      return true;
     }
 
     async function authenticateDemoAccount(username, password) {
@@ -23193,7 +23196,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           };
           persistSession(session, remember);
           passwordInput.value = "";
-          enterAuthenticatedApplication(session, false);
+          await enterAuthenticatedApplication(session, false);
         } finally {
           setLoginLoading(false);
         }
@@ -23221,7 +23224,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
 
       const storedSession = readStoredSession();
-      if (storedSession) enterAuthenticatedApplication(storedSession, true);
+      if (storedSession) {
+        setLoginLoading(true);
+        enterAuthenticatedApplication(storedSession, true)
+          .catch(() => showLoginGateway("Shared Drive database could not load.<br>ไม่สามารถโหลดฐานข้อมูลจาก Shared Drive ได้"))
+          .finally(() => setLoginLoading(false));
+      }
       else showLoginGateway("");
     }
 
