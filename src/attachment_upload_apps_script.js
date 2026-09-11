@@ -579,7 +579,7 @@ function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCou
     if (index) rows.push({ type: "separator", color: "#ECEEEF", margin: "md" });
     const ownerContents = [
       { type: "text", text: lineFlexText_(owner.ownerName, 80), size: "xs", weight: "bold", color: "#202124", wrap: true, maxLines: 2 },
-      { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", cornerRadius: "md", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
+      { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
     ].concat(lineFlexOwnerActionRows_(owner.actions));
     rows.push({
       type: "box",
@@ -622,9 +622,9 @@ function lineFlexOwnerActionRows_(actions) {
     rows.push({
       type: "box",
       layout: "horizontal",
-      height: "30px",
-      margin: "xs",
-      spacing: "xs",
+      height: "26px",
+      margin: "none",
+      spacing: "none",
       contents: items.slice(index, index + 5).map(function(item) {
         return {
           type: "box",
@@ -632,7 +632,6 @@ function lineFlexOwnerActionRows_(actions) {
           flex: 1,
           paddingAll: "4px",
           backgroundColor: "#E7EDCA",
-          cornerRadius: "sm",
           justifyContent: "center",
           contents: [{ type: "text", text: lineFlexText_(item.action, 30), size: "xxs", color: "#202124", weight: "bold", align: "center", wrap: true, maxLines: 2 }]
         };
