@@ -20190,6 +20190,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseActiveLoads = 0;
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
+    let lastCloudDatabaseFingerprint = "";
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -20617,7 +20618,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        departmentMasterCsvText: departmentMasterCsvText(),
 	        peopleMasterCsvText: peopleMasterCsvText(),
 	        contractTemplateCsvText: contractTemplateCsvText(),
-	        actionSlaCsvText: actionSlaCsvText()
+	        actionSlaCsvText: actionSlaCsvText(),
+	        expectedCloudFingerprint: lastCloudDatabaseFingerprint
 	      };
 	    }
 
@@ -20660,6 +20662,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      const peopleMasterText = payload.peopleMasterCsvText || payload.files?.people?.text || "";
 	      const contractTemplateText = payload.contractTemplateCsvText || payload.files?.contractTemplates?.text || "";
 	      const actionSlaText = payload.actionSlaCsvText || payload.files?.actionSla?.text || "";
+	      const receivedCloudFingerprint = String(payload.databaseFingerprint || "").trim();
 	      if (options.expectedFingerprint) {
 	        const receivedFingerprint = driveDatabasePayloadFingerprint({
 	          contractsCsvText: contractText,
@@ -20707,6 +20710,15 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        migratedPendingDueRequestCount += recoverPendingDueDateRequestsFromLogs(cloudContracts, cloudLogs);
 	      }
 	      refreshDueDateRequestsFromContracts(cloudContracts);
+	      lastCloudDatabaseFingerprint = receivedCloudFingerprint || driveDatabasePayloadFingerprint({
+	        contractsCsvText: contractText,
+	        logsCsvText: logText,
+	        typeMasterCsvText: typeMasterText,
+	        departmentMasterCsvText: departmentMasterText,
+	        peopleMasterCsvText: peopleMasterText,
+	        contractTemplateCsvText: contractTemplateText,
+	        actionSlaCsvText: actionSlaText
+	      });
 	      localStorage.setItem(localDatabaseKey, JSON.stringify({
 	        savedAt: localIsoDateTime(),
 	        standardSlaDataVersion,
@@ -20789,6 +20801,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
+      if (!lastCloudDatabaseFingerprint) {
+        updateDatabaseSyncStatus("Reload Shared Drive before saving");
+        await loadDriveDatabaseFromCloud({ force: true });
+        return false;
+      }
       if (isDriveDatabaseSaveInProgress) {
         driveDatabaseSaveQueued = true;
         return false;
