@@ -467,11 +467,11 @@
     }
 
     .dashboard-person-panel {
-      grid-column: 1;
+      grid-column: 1 / -1;
     }
 
     .dashboard-dept-panel {
-      grid-column: 2;
+      grid-column: 1 / -1;
     }
 
     .chart-panel {
@@ -545,6 +545,53 @@
       font-size: 12px;
       font-weight: 800;
       text-align: right;
+    }
+
+    .horizontal-status-actions {
+      grid-column: 2;
+      display: grid;
+      grid-template-columns: repeat(var(--action-count), minmax(0, 1fr));
+      min-width: 0;
+      height: 22px;
+      min-height: 22px;
+      margin-top: 0;
+      overflow: hidden;
+      border: 1px solid #d6dfaa;
+      border-radius: 5px;
+      background: #f5f7eb;
+    }
+
+    .dashboard-person-panel .horizontal-status-row {
+      row-gap: 0;
+    }
+
+    .dashboard-person-panel .horizontal-status-track {
+      border-radius: 6px 6px 0 0;
+    }
+
+    .dashboard-person-panel .horizontal-status-actions {
+      border-top: 0;
+      border-radius: 0 0 6px 6px;
+    }
+
+    .horizontal-status-action-segment {
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      padding: 4px 3px;
+      border-right: 1px solid #ffffff;
+      background: #e7edca;
+      color: var(--ink);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-align: center;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+
+    .horizontal-status-action-segment:last-child {
+      border-right: 0;
     }
 
     .horizontal-status-legend {
@@ -14938,39 +14985,42 @@
     }
 
     async function initializeAuthenticatedApplication() {
-      if (authenticatedApplicationInitialized) return;
-      authenticatedApplicationInitialized = true;
-      initializeEditableDropdowns();
-      setupUpdateAttachmentAndCc();
-      setCaseActionStep("add");
-      setupCsvDatabaseControls();
-      setupMasterDataControls();
-      setupAdministrativeControls();
-      loadContractsDatabase();
-      renderAll();
+      if (!authenticatedApplicationInitialized) {
+        authenticatedApplicationInitialized = true;
+        initializeEditableDropdowns();
+        setupUpdateAttachmentAndCc();
+        setCaseActionStep("add");
+        setupCsvDatabaseControls();
+        setupMasterDataControls();
+        setupAdministrativeControls();
+        loadContractsDatabase();
+        renderAll();
+      }
       updateDatabaseSyncStatus("Checking Shared Drive for the latest data...");
-      await loadDriveDatabaseFromCloud({ force: true });
+      const cloudLoaded = await loadDriveDatabaseFromCloud({ force: true });
       startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
+      return cloudLoaded;
     }
 
-    function enterAuthenticatedApplication(session, restoreRoute = false) {
+    async function enterAuthenticatedApplication(session, restoreRoute = false) {
       currentUser = buildCurrentUser(session.username, session.role);
       if (!currentUser) {
         clearStoredSession();
         showLoginGateway("");
-        return;
+        return false;
       }
-      document.body.classList.remove("auth-locked");
-      document.body.classList.add("auth-ready");
       updateProfileDisplay();
       applyRoleAccess();
-      initializeAuthenticatedApplication();
+      await initializeAuthenticatedApplication();
+      document.body.classList.remove("auth-locked");
+      document.body.classList.add("auth-ready");
       applyRoleAccess();
       renderAll();
       scheduleSessionExpiry();
       updateSessionActivity(true);
       setView(restoreRoute ? currentRouteView() : "dashboard", { replaceRoute: true });
+      return true;
     }
 
     async function authenticateDemoAccount(username, password) {
@@ -15678,7 +15728,8 @@
       const rows = labels.map(item => {
         const yellowCount = countFn(item.value, "Y");
         const redCount = countFn(item.value, "R");
-        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount };
+        const latestActions = typeof options.latestActionsForLabel === "function" ? options.latestActionsForLabel(item.value) : [];
+        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount, latestActions };
       }).filter(row => row.total > 0)
         .sort((a, b) => b.priorityTotal - a.priorityTotal || b.redCount - a.redCount || b.yellowCount - a.yellowCount || a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
       if (!rows.length) return `<div class="empty-state">No Alert records</div>`;
@@ -15697,6 +15748,7 @@
                   ${row.redCount > 0 ? `<div class="horizontal-status-segment overdue" style="width:${redWidth}%" aria-label="${escapeHtml(redLabel)} ${row.redCount}">${row.redCount}</div>` : ""}
                 </div></div>
                 <div class="horizontal-status-total">${row.total}</div>
+                ${row.latestActions.length ? `<div class="horizontal-status-actions" style="--action-count:${row.latestActions.length}">${row.latestActions.map(item => `<span class="horizontal-status-action-segment" title="${escapeHtml(item.contractId)} · ${escapeHtml(item.action)}">${escapeHtml(item.action)}</span>`).join("")}</div>` : ""}
               </div>`;
           }).join("")}
         </div>
@@ -15784,6 +15836,8 @@
             department: item.department || contract.department || "-",
             contractOwner: item.owner || contract.owner || "Unassigned",
             stationOwner,
+            latestAction: latestLog?.[12] || contract.stage || "-",
+            latestReason: latestLog?.[17] || latestLog?.[11] || latestLog?.[20] || "-",
             pendingDays: Number(item.pendingDays) || 0
           };
         })
@@ -15832,6 +15886,8 @@
                     <div class="compact-contract-name">${escapeHtml(row.name)}</div>
                     <div class="compact-subline"><b>Type:</b> ${escapeHtml(row.type)}</div>
                     <div class="compact-subline"><b>Vendor:</b> ${escapeHtml(row.vendor)}</div>
+                    <div class="compact-subline"><b>Latest Action / การดำเนินการล่าสุด:</b> ${escapeHtml(row.latestAction)}</div>
+                    <div class="compact-subline"><b>Reason / เหตุผล:</b> ${escapeHtml(row.latestReason)}</div>
                   </td>
                   <td class="compact-owner-cell">
                     <div><span>Department</span><strong>${escapeHtml(row.department)}</strong></div>
@@ -15881,11 +15937,21 @@
           { yellowLabel: "Delayed", redLabel: "Overdue" }
         )}`;
 
+      const latestActionsForPerson = person => {
+        return contractStatusData
+          .filter(item => (item.owner || "Unassigned") === person && ["Y", "R"].includes(item.statusCode))
+          .map(item => {
+            const contract = contracts.find(row => row.id === item.id) || {};
+            const latestLog = latestLogFor(item.id);
+            return { contractId: item.id, action: latestLog?.[12] || contract.stage || "-" };
+          });
+      };
+
       document.querySelector("#personAlertChart").innerHTML = `
         ${groupedAlertBarRows(
           mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
           (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
-          { yellowLabel: "Delayed", redLabel: "Overdue" }
+          { yellowLabel: "Delayed", redLabel: "Overdue", latestActionsForLabel: latestActionsForPerson }
         )}`;
 
     }
@@ -20124,6 +20190,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseActiveLoads = 0;
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
+    let lastCloudDatabaseFingerprint = "";
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -20551,7 +20618,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        departmentMasterCsvText: departmentMasterCsvText(),
 	        peopleMasterCsvText: peopleMasterCsvText(),
 	        contractTemplateCsvText: contractTemplateCsvText(),
-	        actionSlaCsvText: actionSlaCsvText()
+	        actionSlaCsvText: actionSlaCsvText(),
+	        expectedCloudFingerprint: lastCloudDatabaseFingerprint
 	      };
 	    }
 
@@ -20594,6 +20662,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	      const peopleMasterText = payload.peopleMasterCsvText || payload.files?.people?.text || "";
 	      const contractTemplateText = payload.contractTemplateCsvText || payload.files?.contractTemplates?.text || "";
 	      const actionSlaText = payload.actionSlaCsvText || payload.files?.actionSla?.text || "";
+	      const receivedCloudFingerprint = String(payload.databaseFingerprint || "").trim();
 	      if (options.expectedFingerprint) {
 	        const receivedFingerprint = driveDatabasePayloadFingerprint({
 	          contractsCsvText: contractText,
@@ -20641,6 +20710,15 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        migratedPendingDueRequestCount += recoverPendingDueDateRequestsFromLogs(cloudContracts, cloudLogs);
 	      }
 	      refreshDueDateRequestsFromContracts(cloudContracts);
+	      lastCloudDatabaseFingerprint = receivedCloudFingerprint || driveDatabasePayloadFingerprint({
+	        contractsCsvText: contractText,
+	        logsCsvText: logText,
+	        typeMasterCsvText: typeMasterText,
+	        departmentMasterCsvText: departmentMasterText,
+	        peopleMasterCsvText: peopleMasterText,
+	        contractTemplateCsvText: contractTemplateText,
+	        actionSlaCsvText: actionSlaText
+	      });
 	      localStorage.setItem(localDatabaseKey, JSON.stringify({
 	        savedAt: localIsoDateTime(),
 	        standardSlaDataVersion,
@@ -20723,6 +20801,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
+      if (!lastCloudDatabaseFingerprint) {
+        updateDatabaseSyncStatus("Reload Shared Drive before saving");
+        await loadDriveDatabaseFromCloud({ force: true });
+        return false;
+      }
       if (isDriveDatabaseSaveInProgress) {
         driveDatabaseSaveQueued = true;
         return false;
@@ -23130,7 +23213,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           };
           persistSession(session, remember);
           passwordInput.value = "";
-          enterAuthenticatedApplication(session, false);
+          await enterAuthenticatedApplication(session, false);
         } finally {
           setLoginLoading(false);
         }
@@ -23158,7 +23241,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       });
 
       const storedSession = readStoredSession();
-      if (storedSession) enterAuthenticatedApplication(storedSession, true);
+      if (storedSession) {
+        setLoginLoading(true);
+        enterAuthenticatedApplication(storedSession, true)
+          .catch(() => showLoginGateway("Shared Drive database could not load.<br>ไม่สามารถโหลดฐานข้อมูลจาก Shared Drive ได้"))
+          .finally(() => setLoginLoading(false));
+      }
       else showLoginGateway("");
     }
 
