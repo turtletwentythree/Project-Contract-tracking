@@ -6800,7 +6800,7 @@ def main():
         const timeoutId = window.setTimeout(() => {
           if (!silent) updateDatabaseSyncStatus("Shared Drive database load timed out");
           finish(false);
-        }, 15000);
+        }, 30000);
         window[callbackName] = payload => {
           try {
             if (loadSequence < lastAppliedDriveDatabaseLoad) {
