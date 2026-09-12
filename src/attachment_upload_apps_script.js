@@ -110,18 +110,49 @@ function handleLineWebhook_(payload, event) {
 
 function loadDriveDatabase_(params) {
   const folder = DriveApp.getFolderById(params.folderId || DEFAULT_FOLDER_ID);
-  return {
+  const database = readDriveDatabaseTexts_(folder, params);
+  return Object.assign({
     success: true,
     folderId: folder.getId(),
     loadedAt: new Date().toISOString(),
+    databaseFingerprint: driveDatabaseFingerprint_(database)
+  }, database);
+}
+
+function readDriveDatabaseTexts_(folder, params) {
+  return {
     contractsCsvText: readTextFileByName_(folder, params.contractsCsv || "tracking_contracts_contracts_db.csv"),
     logsCsvText: readTextFileByName_(folder, params.logsCsv || "tracking_contracts_log_db.csv"),
     typeMasterCsvText: readTextFileByName_(folder, params.typeMasterCsv || "tracking_contracts_type_master_db.csv"),
-	    departmentMasterCsvText: readTextFileByName_(folder, params.departmentMasterCsv || "tracking_contracts_department_master_db.csv"),
-	    peopleMasterCsvText: readTextFileByName_(folder, params.peopleMasterCsv || "tracking_contracts_people_master_db.csv"),
-	    contractTemplateCsvText: readTextFileByName_(folder, params.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv"),
-	    actionSlaCsvText: readTextFileByName_(folder, params.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv")
+    departmentMasterCsvText: readTextFileByName_(folder, params.departmentMasterCsv || "tracking_contracts_department_master_db.csv"),
+    peopleMasterCsvText: readTextFileByName_(folder, params.peopleMasterCsv || "tracking_contracts_people_master_db.csv"),
+    contractTemplateCsvText: readTextFileByName_(folder, params.contractTemplateCsv || "tracking_contracts_contract_template_master_db.csv"),
+    actionSlaCsvText: readTextFileByName_(folder, params.actionSlaCsv || "tracking_contracts_action_sla_master_db.csv")
   };
+}
+
+function databaseTextFingerprint_(text) {
+  const source = String(text || "");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return source.length + ":" + (hash >>> 0).toString(16);
+}
+
+function driveDatabaseFingerprint_(database) {
+  return [
+    "contractsCsvText",
+    "logsCsvText",
+    "typeMasterCsvText",
+    "departmentMasterCsvText",
+    "peopleMasterCsvText",
+    "contractTemplateCsvText",
+    "actionSlaCsvText"
+  ].map(function(key) {
+    return databaseTextFingerprint_(database && database[key] || "");
+  }).join("|");
 }
 
 function saveDriveDatabase_(payload) {
@@ -129,6 +160,11 @@ function saveDriveDatabase_(payload) {
   lock.waitLock(30000);
   try {
     const folder = DriveApp.getFolderById(payload.folderId || DEFAULT_FOLDER_ID);
+    const currentDatabase = readDriveDatabaseTexts_(folder, payload);
+    const currentFingerprint = driveDatabaseFingerprint_(currentDatabase);
+    const expectedFingerprint = String(payload.expectedCloudFingerprint || "").trim();
+    if (!expectedFingerprint) throw new Error("Shared Drive save rejected: reload the latest database before saving.");
+    if (expectedFingerprint !== currentFingerprint) throw new Error("Shared Drive save conflict: the database changed after this page loaded. Reload and try again.");
     const files = {
       contracts: upsertTextFileByName_(folder, payload.contractsCsv || "tracking_contracts_contracts_db.csv", payload.contractsCsvText || ""),
       logs: upsertTextFileByName_(folder, payload.logsCsv || "tracking_contracts_log_db.csv", payload.logsCsvText || ""),
@@ -350,6 +386,8 @@ function runLineStatusNotificationsUnlocked_(options) {
   const forceSend = settings.forceSend === true || String(settings.forceSend || "").toLowerCase() === "true";
   const folder = DriveApp.getFolderById(settings.folderId || DEFAULT_DATABASE_FOLDER_ID);
   const contracts = csvObjects_(readTextFileByName_(folder, settings.contractsCsv || "tracking_contracts_contracts_db.csv"));
+  const logs = csvObjects_(readTextFileByName_(folder, settings.logsCsv || "tracking_contracts_log_db.csv"));
+  const latestLogs = latestLineLogMap_(logs);
   const people = csvObjects_(readTextFileByName_(folder, settings.peopleMasterCsv || "tracking_contracts_people_master_db.csv"));
   const owners = lineOwnerMap_(people);
   const properties = PropertiesService.getScriptProperties();
@@ -368,6 +406,7 @@ function runLineStatusNotificationsUnlocked_(options) {
     if (statusCode !== "Y" && statusCode !== "R") return;
 
     const contractId = String(contract["Contract ID"] || "").trim();
+    const latestLog = latestLogs[contractId] || {};
     const ownerName = String(contract["Contract Owner"] || "").trim();
     const owner = owners[normalizeLineLookup_(ownerName)] || null;
     const lineUserId = String(owner && (owner.lineUserId || owner["LINE User ID"]) || "").trim();
@@ -411,6 +450,9 @@ function runLineStatusNotificationsUnlocked_(options) {
       ownerName: ownerName || "Unassigned",
       pendingDays: accumulatedDays,
       totalSla: Number(contract["Total SLA"] || 0) || 0,
+      vendor: String(contract["Vendor / Counter party"] || contract.Vendor || "-").trim() || "-",
+      action: String(latestLog["Action Name EN"] || latestLog.Action || contract.Stage || "-").trim() || "-",
+      reason: String(latestLog["Action Reason Detail"] || latestLog["Action Reason"] || latestLog["Delay Reason"] || latestLog["Corrective Action Detail"] || "-").trim() || "-",
       to: lineRecipient,
       recipientType: recipientType,
       dedupeKey: dedupeKey,
@@ -473,6 +515,15 @@ function runLineStatusNotificationsUnlocked_(options) {
     runAt: new Date().toISOString(),
     results: results
   };
+}
+
+function latestLineLogMap_(logs) {
+  const latest = {};
+  (logs || []).forEach(function(log) {
+    const contractId = String(log["Contract ID"] || "").trim();
+    if (contractId) latest[contractId] = log;
+  });
+  return latest;
 }
 
 function lineFlexNotificationBatches_(candidates) {
@@ -538,9 +589,10 @@ function lineFlexOwnerStatusSummaryMessage_(candidates) {
   const grouped = {};
   (candidates || []).forEach(function(candidate) {
     const ownerName = candidate.ownerName || "Unassigned";
-    if (!grouped[ownerName]) grouped[ownerName] = { ownerName: ownerName, delayed: 0, risk: 0 };
+    if (!grouped[ownerName]) grouped[ownerName] = { ownerName: ownerName, delayed: 0, risk: 0, actions: [] };
     if (candidate.statusCode === "Y") grouped[ownerName].delayed += 1;
     if (candidate.statusCode === "R") grouped[ownerName].risk += 1;
+    grouped[ownerName].actions.push({ contractId: candidate.contractId, action: candidate.action || "-" });
   });
   const owners = Object.keys(grouped).map(function(key) { return grouped[key]; }).sort(function(a, b) {
     return (b.delayed + b.risk) - (a.delayed + a.risk) || b.risk - a.risk || a.ownerName.localeCompare(b.ownerName);
@@ -561,14 +613,15 @@ function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCou
   const rows = [];
   (owners || []).forEach(function(owner, index) {
     if (index) rows.push({ type: "separator", color: "#ECEEEF", margin: "md" });
+    const ownerContents = [
+      { type: "text", text: lineFlexText_(owner.ownerName, 80), size: "xs", weight: "bold", color: "#202124", wrap: true, maxLines: 2 },
+      { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
+    ].concat(lineFlexOwnerActionRows_(owner.actions));
     rows.push({
       type: "box",
       layout: "vertical",
       margin: index ? "md" : "none",
-      contents: [
-        { type: "text", text: lineFlexText_(owner.ownerName, 80), size: "xs", weight: "bold", color: "#202124", wrap: true, maxLines: 2 },
-        { type: "box", layout: "horizontal", height: "26px", margin: "sm", backgroundColor: "#E5EAEE", cornerRadius: "md", contents: lineFlexOwnerStatusBar_(owner, maxTotal) }
-      ]
+      contents: ownerContents
     });
   });
   return {
@@ -598,6 +651,32 @@ function lineFlexOwnerStatusSummaryBubble_(owners, maxTotal, pageNumber, pageCou
   };
 }
 
+function lineFlexOwnerActionRows_(actions) {
+  const rows = [];
+  const items = actions || [];
+  for (let index = 0; index < items.length; index += 5) {
+    rows.push({
+      type: "box",
+      layout: "horizontal",
+      height: "26px",
+      margin: "none",
+      spacing: "none",
+      contents: items.slice(index, index + 5).map(function(item) {
+        return {
+          type: "box",
+          layout: "vertical",
+          flex: 1,
+          paddingAll: "4px",
+          backgroundColor: "#E7EDCA",
+          justifyContent: "center",
+          contents: [{ type: "text", text: lineFlexText_(item.action, 30), size: "xxs", color: "#202124", weight: "bold", align: "center", wrap: true, maxLines: 2 }]
+        };
+      })
+    });
+  }
+  return rows;
+}
+
 function lineFlexOwnerStatusBar_(owner, maxTotal) {
   const contents = [];
   if (owner.delayed > 0) contents.push({
@@ -624,7 +703,7 @@ function lineFlexStatusBubble_(statusCode, ownerName, pageCandidates, pageNumber
   rows.push(lineFlexTableHeader_());
   pageCandidates.forEach(function(candidate) {
     rows.push({ type: "separator", color: "#ECEEEF" });
-    rows.push(lineFlexContractRow_(candidate, accent));
+    rows.push(lineFlexContractRow_(candidate, accent, isOverdue));
   });
   return {
     type: "bubble",
@@ -702,14 +781,15 @@ function lineFlexTableHeader_() {
   };
 }
 
-function lineFlexContractRow_(candidate, accent) {
+function lineFlexContractRow_(candidate, accent, showOverdueDetails) {
   const contract = candidate.contract || {};
   const confidential = /confidential|สัญญาลับ/i.test([contract["Access Level"], contract.Visibility, contract.Category].join(" "));
   const contractName = confidential ? "Confidential Contract / สัญญาลับ" : String(contract["Contract Name"] || "-");
-  return {
+  const vendor = confidential ? "Restricted / จำกัดสิทธิ์" : candidate.vendor;
+  const reason = confidential ? "Restricted / จำกัดสิทธิ์" : candidate.reason;
+  const contents = [{
     type: "box",
     layout: "horizontal",
-    paddingAll: "10px",
     spacing: "sm",
     contents: [
       { type: "text", text: lineFlexText_(candidate.contractId, 28), size: "xxs", color: "#1667A8", weight: "bold", wrap: true, flex: 3 },
@@ -717,6 +797,17 @@ function lineFlexContractRow_(candidate, accent) {
       { type: "text", text: String(Number(candidate.pendingDays || 0)), size: "xxs", color: accent, weight: "bold", align: "end", flex: 2 },
       { type: "text", text: lineFlexText_(contract["Due Date"] || "-", 20), size: "xxs", color: "#4D5357", align: "end", wrap: true, flex: 3 }
     ]
+  }];
+  if (showOverdueDetails) {
+    contents.push({ type: "text", text: "Vendor: " + lineFlexText_(vendor, 80), size: "xxs", color: "#4D5357", margin: "sm", wrap: true, maxLines: 2 });
+    contents.push({ type: "text", text: "Action: " + lineFlexText_(candidate.action, 60), size: "xxs", color: "#202124", margin: "xs", weight: "bold", wrap: true, maxLines: 2 });
+    contents.push({ type: "text", text: "Reason: " + lineFlexText_(reason, 140), size: "xxs", color: "#4D5357", margin: "xs", wrap: true, maxLines: 3 });
+  }
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "10px",
+    contents: contents
   };
 }
 

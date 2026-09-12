@@ -1672,6 +1672,23 @@ def main():
     }
 
     html = SOURCE_HTML.read_text(encoding="utf-8")
+    html = html.replace(
+        """    .dashboard-person-panel {
+      grid-column: 1;
+    }
+
+    .dashboard-dept-panel {
+      grid-column: 2;
+    }""",
+        """    .dashboard-person-panel {
+      grid-column: 1 / -1;
+    }
+
+    .dashboard-dept-panel {
+      grid-column: 1 / -1;
+    }""",
+        1,
+    )
 
     html = replace_between(
         html,
@@ -6313,6 +6330,7 @@ def main():
     let driveDatabaseActiveLoads = 0;
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
+    let lastCloudDatabaseFingerprint = "";
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -6647,7 +6665,8 @@ def main():
 	        departmentMasterCsvText: departmentMasterCsvText(),
 	        peopleMasterCsvText: peopleMasterCsvText(),
 	        contractTemplateCsvText: contractTemplateCsvText(),
-	        actionSlaCsvText: actionSlaCsvText()
+	        actionSlaCsvText: actionSlaCsvText(),
+	        expectedCloudFingerprint: lastCloudDatabaseFingerprint
 	      };
 	    }
 
@@ -6690,6 +6709,7 @@ def main():
 	      const peopleMasterText = payload.peopleMasterCsvText || payload.files?.people?.text || "";
 	      const contractTemplateText = payload.contractTemplateCsvText || payload.files?.contractTemplates?.text || "";
 	      const actionSlaText = payload.actionSlaCsvText || payload.files?.actionSla?.text || "";
+	      const receivedCloudFingerprint = String(payload.databaseFingerprint || "").trim();
 	      if (options.expectedFingerprint) {
 	        const receivedFingerprint = driveDatabasePayloadFingerprint({
 	          contractsCsvText: contractText,
@@ -6718,6 +6738,15 @@ def main():
       isApplyingDriveDatabaseLoad = true;
       contracts.splice(0, contracts.length, ...cloudContracts);
       logRecords.splice(0, logRecords.length, ...cloudLogs);
+	      lastCloudDatabaseFingerprint = receivedCloudFingerprint || driveDatabasePayloadFingerprint({
+	        contractsCsvText: contractText,
+	        logsCsvText: logText,
+	        typeMasterCsvText: typeMasterText,
+	        departmentMasterCsvText: departmentMasterText,
+	        peopleMasterCsvText: peopleMasterText,
+	        contractTemplateCsvText: contractTemplateText,
+	        actionSlaCsvText: actionSlaText
+	      });
 	      localStorage.setItem(localDatabaseKey, JSON.stringify({
 	        savedAt: localIsoDateTime(),
 	        standardSlaDataVersion,
@@ -6799,6 +6828,11 @@ def main():
     async function saveDriveDatabaseToCloud() {
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
+      if (!lastCloudDatabaseFingerprint) {
+        updateDatabaseSyncStatus("Reload Shared Drive before saving");
+        await loadDriveDatabaseFromCloud({ force: true });
+        return false;
+      }
       if (isDriveDatabaseSaveInProgress) {
         driveDatabaseSaveQueued = true;
         return false;
@@ -8839,38 +8873,42 @@ def main():
     }
 
     async function initializeAuthenticatedApplication() {
-      if (authenticatedApplicationInitialized) return;
-      authenticatedApplicationInitialized = true;
-      initializeEditableDropdowns();
-      setupUpdateAttachmentAndCc();
-      setCaseActionStep("add");
-      setupCsvDatabaseControls();
-      setupMasterDataControls();
-      loadContractsDatabase();
-      renderAll();
+      if (!authenticatedApplicationInitialized) {
+        authenticatedApplicationInitialized = true;
+        initializeEditableDropdowns();
+        setupUpdateAttachmentAndCc();
+        setCaseActionStep("add");
+        setupCsvDatabaseControls();
+        setupMasterDataControls();
+        setupAdministrativeControls();
+        loadContractsDatabase();
+        renderAll();
+      }
       updateDatabaseSyncStatus("Checking Shared Drive for the latest data...");
-      await loadDriveDatabaseFromCloud({ force: true });
+      const cloudLoaded = await loadDriveDatabaseFromCloud({ force: true });
       startDriveDatabaseAutoRefresh();
       syncAddCaseLinkedFields("init");
+      return cloudLoaded;
     }
 
-    function enterAuthenticatedApplication(session, restoreRoute = false) {
+    async function enterAuthenticatedApplication(session, restoreRoute = false) {
       currentUser = buildCurrentUser(session.username, session.role);
       if (!currentUser) {
         clearStoredSession();
         showLoginGateway("");
-        return;
+        return false;
       }
-      document.body.classList.remove("auth-locked");
-      document.body.classList.add("auth-ready");
       updateProfileDisplay();
       applyRoleAccess();
-      initializeAuthenticatedApplication();
+      await initializeAuthenticatedApplication();
+      document.body.classList.remove("auth-locked");
+      document.body.classList.add("auth-ready");
       applyRoleAccess();
       renderAll();
       scheduleSessionExpiry();
       updateSessionActivity(true);
       setView(restoreRoute ? currentRouteView() : "dashboard", { replaceRoute: true });
+      return true;
     }
 
     async function authenticateDemoAccount(username, password) {
@@ -9066,7 +9104,7 @@ def main():
           };
           persistSession(session, remember);
           passwordInput.value = "";
-          enterAuthenticatedApplication(session, false);
+          await enterAuthenticatedApplication(session, false);
         } finally {
           setLoginLoading(false);
         }
@@ -9094,7 +9132,12 @@ def main():
       });
 
       const storedSession = readStoredSession();
-      if (storedSession) enterAuthenticatedApplication(storedSession, true);
+      if (storedSession) {
+        setLoginLoading(true);
+        enterAuthenticatedApplication(storedSession, true)
+          .catch(() => showLoginGateway("Shared Drive database could not load.<br>ไม่สามารถโหลดฐานข้อมูลจาก Shared Drive ได้"))
+          .finally(() => setLoginLoading(false));
+      }
       else showLoginGateway("");
     }
 
@@ -11091,6 +11134,131 @@ def main():
       if (reasonInput) {
         reasonInput.required = reasonRequired;
         reasonInput.dataset.reasonRequired = reasonRequired ? "true" : "false";''',
+        1,
+    )
+    html = html.replace(
+        '''            contractOwner: item.owner || contract.owner || "Unassigned",
+            stationOwner,
+            pendingDays: Number(item.pendingDays) || 0''',
+        '''            contractOwner: item.owner || contract.owner || "Unassigned",
+            stationOwner,
+            latestAction: latestLog?.[12] || contract.stage || "-",
+            latestReason: latestLog?.[17] || latestLog?.[11] || latestLog?.[20] || "-",
+            pendingDays: Number(item.pendingDays) || 0''',
+        1,
+    )
+    html = html.replace(
+        '''                    <div class="compact-subline"><b>Vendor:</b> ${escapeHtml(row.vendor)}</div>
+                  </td>''',
+        '''                    <div class="compact-subline"><b>Vendor:</b> ${escapeHtml(row.vendor)}</div>
+                    <div class="compact-subline"><b>Latest Action / การดำเนินการล่าสุด:</b> ${escapeHtml(row.latestAction)}</div>
+                    <div class="compact-subline"><b>Reason / เหตุผล:</b> ${escapeHtml(row.latestReason)}</div>
+                  </td>''',
+        1,
+    )
+    html = html.replace(
+        '''    .horizontal-status-total {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .horizontal-status-legend {''',
+        '''    .horizontal-status-total {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .horizontal-status-actions {
+      grid-column: 2;
+      display: grid;
+      grid-template-columns: repeat(var(--action-count), minmax(0, 1fr));
+      min-width: 0;
+      height: 22px;
+      min-height: 22px;
+      margin-top: 0;
+      overflow: hidden;
+      border: 1px solid #d6dfaa;
+      border-radius: 5px;
+      background: #f5f7eb;
+    }
+
+    .dashboard-person-panel .horizontal-status-row {
+      row-gap: 0;
+    }
+
+    .dashboard-person-panel .horizontal-status-track {
+      border-radius: 6px 6px 0 0;
+    }
+
+    .dashboard-person-panel .horizontal-status-actions {
+      border-top: 0;
+      border-radius: 0 0 6px 6px;
+    }
+
+    .horizontal-status-action-segment {
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      padding: 4px 3px;
+      border-right: 1px solid #ffffff;
+      background: #e7edca;
+      color: var(--ink);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-align: center;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+
+    .horizontal-status-action-segment:last-child {
+      border-right: 0;
+    }
+
+    .horizontal-status-legend {''',
+        1,
+    )
+    html = html.replace(
+        '''        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount };''',
+        '''        const latestActions = typeof options.latestActionsForLabel === "function" ? options.latestActionsForLabel(item.value) : [];
+        return { label: item.label, yellowCount, redCount, priorityTotal: yellowCount + redCount, total: yellowCount + redCount, latestActions };''',
+        1,
+    )
+    html = html.replace(
+        '''                <div class="horizontal-status-total">${row.total}</div>
+              </div>`;''',
+        '''                <div class="horizontal-status-total">${row.total}</div>
+                ${row.latestActions.length ? `<div class="horizontal-status-actions" style="--action-count:${row.latestActions.length}">${row.latestActions.map(item => `<span class="horizontal-status-action-segment" title="${escapeHtml(item.contractId)} · ${escapeHtml(item.action)}">${escapeHtml(item.action)}</span>`).join("")}</div>` : ""}
+              </div>`;''',
+        1,
+    )
+    html = html.replace(
+        '''      document.querySelector("#personAlertChart").innerHTML = `
+        ${groupedAlertBarRows(
+          mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
+          (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
+          { yellowLabel: "Delayed", redLabel: "Overdue" }
+        )}`;''',
+        '''      const latestActionsForPerson = person => {
+        return contractStatusData
+          .filter(item => (item.owner || "Unassigned") === person && ["Y", "R"].includes(item.statusCode))
+          .map(item => {
+            const contract = contracts.find(row => row.id === item.id) || {};
+            const latestLog = latestLogFor(item.id);
+            return { contractId: item.id, action: latestLog?.[12] || contract.stage || "-" };
+          });
+      };
+
+      document.querySelector("#personAlertChart").innerHTML = `
+        ${groupedAlertBarRows(
+          mockPersonContractStatus.map(item => ({ label: item.label, value: item.label })),
+          (label, alertCode) => mockStatusCount(mockPersonContractStatus, label, alertCode),
+          { yellowLabel: "Delayed", redLabel: "Overdue", latestActionsForLabel: latestActionsForPerson }
+        )}`;''',
         1,
     )
 
