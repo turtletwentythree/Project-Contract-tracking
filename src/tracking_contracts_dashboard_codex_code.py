@@ -6106,22 +6106,25 @@ def main():
         value: item.id,
         label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
       }));""",
-        """      const contractOptions = [
+        """      const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
+      const contractOptionsFor = items => [
         { value: "", label: "Select Contract / เลือกสัญญา" },
-        ...accessibleContracts.map(item => ({
+        ...items.map(item => ({
           value: item.id,
           label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
         }))
-      ];""",
+      ];
+      const openContractOptions = contractOptionsFor(openContracts);
+      const allContractOptions = contractOptionsFor(accessibleContracts);""",
         1,
     )
     html = html.replace(
         """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
-        """      fillSelect("updateContract", contractOptions, lastUserContractId || "");
-      fillSelect("closeContract", contractOptions, lastUserContractId || "");
-      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");""",
+        """      fillSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("adjustDueContract", allContractOptions, lastUserContractId || "");""",
         1,
     )
     html = html.replace(
@@ -7827,7 +7830,7 @@ def main():
     )
     html = html.replace(
         """      if (lastUserContractId && contracts.some(item => item.id === lastUserContractId)) {""",
-        """      if (lastUserContractId && accessibleContracts.some(item => item.id === lastUserContractId)) {""",
+        """      if (lastUserContractId && openContracts.some(item => item.id === lastUserContractId)) {""",
         1,
     )
     html = html.replace(
@@ -10640,22 +10643,25 @@ def main():
         value: item.id,
         label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
       }));""",
-        """      const contractOptions = [
+        """      const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
+      const contractOptionsFor = items => [
         { value: "", label: "Select Contract / เลือกสัญญา" },
-        ...accessibleContracts.map(item => ({
+        ...items.map(item => ({
           value: item.id,
           label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
         }))
-      ];""",
+      ];
+      const openContractOptions = contractOptionsFor(openContracts);
+      const allContractOptions = contractOptionsFor(accessibleContracts);""",
         1,
     )
     html = html.replace(
         """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
-        """      fillSelect("updateContract", contractOptions, lastUserContractId || "");
-      fillSelect("closeContract", contractOptions, lastUserContractId || "");
-      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");""",
+        """      fillSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("adjustDueContract", allContractOptions, lastUserContractId || "");""",
         1,
     )
     html = html.replace(
