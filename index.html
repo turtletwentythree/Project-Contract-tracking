@@ -20760,19 +20760,30 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return new Promise(resolve => {
         const script = document.createElement("script");
         let done = false;
-        const finish = success => {
+        const finish = (success, allowLateResponse = false) => {
           if (done) return;
           done = true;
           window.clearTimeout(timeoutId);
-          delete window[callbackName];
-          script.remove();
+          if (allowLateResponse) {
+            window[callbackName] = () => {
+              delete window[callbackName];
+              script.remove();
+            };
+            window.setTimeout(() => {
+              delete window[callbackName];
+              script.remove();
+            }, 60000);
+          } else {
+            delete window[callbackName];
+            script.remove();
+          }
           driveDatabaseActiveLoads = Math.max(0, driveDatabaseActiveLoads - 1);
           if (success) lastDriveDatabaseRefreshAt = Date.now();
           resolve(success);
         };
         const timeoutId = window.setTimeout(() => {
           if (!silent) updateDatabaseSyncStatus("Shared Drive database load timed out");
-          finish(false);
+          finish(false, true);
         }, 30000);
         window[callbackName] = payload => {
           try {
