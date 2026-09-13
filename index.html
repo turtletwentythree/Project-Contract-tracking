@@ -7355,6 +7355,11 @@
                     <small class="form-hint">Status: Signed / Completed = case finished · Cancelled = case closed without completion</small>
                   </label>
                   <label class="form-field full">
+                    <span class="bilingual-label"><span>Remark</span><span>หมายเหตุ</span></span>
+                    <textarea class="input" name="remark" id="closeRemark" rows="3" placeholder="Enter closing remark / ระบุหมายเหตุการปิดเคส"></textarea>
+                    <small class="form-hint">Optional closing note · หมายเหตุเพิ่มเติม (ไม่บังคับ)</small>
+                  </label>
+                  <label class="form-field full">
                     <span class="bilingual-label"><span>To<span class="field-required-mark" aria-hidden="true">*</span></span><span>ส่งถึง<span class="field-required-mark" aria-hidden="true">*</span></span></span>
                     <input class="input" type="email" name="toEmail" id="closeToEmail" required placeholder="recipient@turtle23.com" autocomplete="email">
                   </label>
@@ -22069,6 +22074,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!contract || !beginUserCaseActionSubmit(formElement)) return;
       const owner = String(form.get("owner") || contract.owner || "").trim();
       const toEmail = String(form.get("toEmail") || "").trim().toLowerCase();
+      const remark = String(form.get("remark") || "").trim();
       const closeDate = String(form.get("closeDate") || todayInputValue());
       const stage = form.get("stage");
       const alert = calculateAlert(stage, 0, 0);
@@ -22099,8 +22105,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         inDate: closeDate,
         outDate: closeDate,
         sla: 0,
-        delayReason: "",
+        delayReason: remark,
         action: stage,
+        actionReasonType: "Close Remark",
+        actionReason: remark,
+        actionReasonTypeTh: "หมายเหตุการปิดเคส",
+        actionReasonTypeEn: "Close Remark",
         attachments: loggedAttachments,
         updatedBy: currentUser.name || "Current User",
         updatedAt
@@ -22112,13 +22122,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       lastUserContractId = id;
       const outcomeEn = stage === "Cancelled" ? "Cancelled" : "Completed";
       const outcomeTh = stage === "Cancelled" ? "ยกเลิก" : "เสร็จสมบูรณ์";
+      const emailBodyLines = [`Contract case ${contract.id} has been closed.`, `Status: ${outcomeEn}`, `Contract Name: ${contract.name}`, `Contract Owner: ${owner || "-"}`, `Close Date: ${formatDateForEmail(closeDate)}`];
+      if (remark) emailBodyLines.push(`Remark: ${remark}`);
+      emailBodyLines.push("", `เคสสัญญา ${contract.id} ปิดเรียบร้อยแล้ว`, `สถานะ: ${outcomeTh}`, `ชื่อสัญญา: ${contract.name}`, `เจ้าของสัญญา: ${owner || "-"}`, `วันที่ปิด: ${formatDateForEmail(closeDate)}`);
+      if (remark) emailBodyLines.push(`หมายเหตุ: ${remark}`);
       const emailDraft = {
         modalTitle: "Send Close Case Email",
         to: toEmail,
         cc: "",
         ccList: [],
         subject: `[Contract Tracking] ${outcomeEn}: ${contract.id} - ${contract.name}`,
-        body: [`Contract case ${contract.id} has been closed.`, `Status: ${outcomeEn}`, `Contract Name: ${contract.name}`, `Contract Owner: ${owner || "-"}`, `Close Date: ${formatDateForEmail(closeDate)}`, "", `เคสสัญญา ${contract.id} ปิดเรียบร้อยแล้ว`, `สถานะ: ${outcomeTh}`, `ชื่อสัญญา: ${contract.name}`, `เจ้าของสัญญา: ${owner || "-"}`, `วันที่ปิด: ${formatDateForEmail(closeDate)}`].join("\n"),
+        body: emailBodyLines.join("\n"),
         attachments: emailAttachments,
         contractId: contract.id,
         action: stage
