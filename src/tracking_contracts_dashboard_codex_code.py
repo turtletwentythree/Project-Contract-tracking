@@ -2867,6 +2867,14 @@ def main():
       justify-content: flex-end;
     }
 
+    #master > .panel > .master-data-save-bar {
+      position: sticky;
+      top: 86px;
+      z-index: 4;
+      background: var(--surface);
+      box-shadow: 0 8px 18px rgba(20, 36, 30, .08);
+    }
+
     .master-table {
       min-width: 720px;
     }
@@ -2896,6 +2904,10 @@ def main():
     @media (max-width: 1040px) {
       .master-data-grid {
         grid-template-columns: 1fr;
+      }
+
+      #master > .panel > .master-data-save-bar {
+        top: 8px;
       }
     }
 
@@ -3737,7 +3749,7 @@ def main():
         """        <section class="view" id="notifications" hidden>""",
         """        <section class="view" id="master">
           <section class="panel">
-            <div class="panel-header">
+            <div class="panel-header master-data-save-bar">
               <div>
                 <h2>Master Data</h2>
                 <small>Edit dropdown data and save it back to Shared Drive</small>
