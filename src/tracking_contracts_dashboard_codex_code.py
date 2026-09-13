@@ -6107,24 +6107,39 @@ def main():
         label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
       }));""",
         """      const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
-      const contractOptionsFor = items => [
-        { value: "", label: "Select Contract / เลือกสัญญา" },
-        ...items.map(item => ({
+      const contractOptionsFor = items => items
+        .slice()
+        .sort((left, right) => String(left.department || "").localeCompare(String(right.department || ""), "en", { sensitivity: "base" })
+          || String(left.id || "").localeCompare(String(right.id || ""), "en", { numeric: true }))
+        .map(item => ({
           value: item.id,
+          group: String(item.department || "Unassigned / ไม่ระบุแผนก").trim(),
           label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
-        }))
-      ];
-      const openContractOptions = contractOptionsFor(openContracts);
-      const allContractOptions = contractOptionsFor(accessibleContracts);""",
+        }));
+      const fillGroupedContractSelect = (id, options, fallback = "") => {
+        const select = document.querySelector(`#${id}`);
+        if (!select) return;
+        const current = select.value || fallback;
+        const values = options.map(option => option.value);
+        const selected = values.includes(current) ? current : "";
+        const groups = new Map();
+        options.forEach(option => {
+          if (!groups.has(option.group)) groups.set(option.group, []);
+          groups.get(option.group).push(option);
+        });
+        select.innerHTML = `<option value="" ${selected ? "" : "selected"}>Select Contract / เลือกสัญญา</option>`
+          + [...groups.entries()].map(([group, groupOptions]) => `<optgroup label="${escapeHtml(group)}">${optionRows(groupOptions, selected)}</optgroup>`).join("");
+      };
+      const openContractOptions = contractOptionsFor(openContracts);""",
         1,
     )
     html = html.replace(
         """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
-        """      fillSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
-      fillSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
-      fillSelect("adjustDueContract", allContractOptions, lastUserContractId || "");""",
+        """      fillGroupedContractSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillGroupedContractSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillGroupedContractSelect("adjustDueContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");""",
         1,
     )
     html = html.replace(
@@ -10644,24 +10659,39 @@ def main():
         label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
       }));""",
         """      const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
-      const contractOptionsFor = items => [
-        { value: "", label: "Select Contract / เลือกสัญญา" },
-        ...items.map(item => ({
+      const contractOptionsFor = items => items
+        .slice()
+        .sort((left, right) => String(left.department || "").localeCompare(String(right.department || ""), "en", { sensitivity: "base" })
+          || String(left.id || "").localeCompare(String(right.id || ""), "en", { numeric: true }))
+        .map(item => ({
           value: item.id,
+          group: String(item.department || "Unassigned / ไม่ระบุแผนก").trim(),
           label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
-        }))
-      ];
-      const openContractOptions = contractOptionsFor(openContracts);
-      const allContractOptions = contractOptionsFor(accessibleContracts);""",
+        }));
+      const fillGroupedContractSelect = (id, options, fallback = "") => {
+        const select = document.querySelector(`#${id}`);
+        if (!select) return;
+        const current = select.value || fallback;
+        const values = options.map(option => option.value);
+        const selected = values.includes(current) ? current : "";
+        const groups = new Map();
+        options.forEach(option => {
+          if (!groups.has(option.group)) groups.set(option.group, []);
+          groups.get(option.group).push(option);
+        });
+        select.innerHTML = `<option value="" ${selected ? "" : "selected"}>Select Contract / เลือกสัญญา</option>`
+          + [...groups.entries()].map(([group, groupOptions]) => `<optgroup label="${escapeHtml(group)}">${optionRows(groupOptions, selected)}</optgroup>`).join("");
+      };
+      const openContractOptions = contractOptionsFor(openContracts);""",
         1,
     )
     html = html.replace(
         """      fillSelect("updateContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("closeContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);
       fillSelect("adjustDueContract", contractOptions, lastUserContractId || accessibleContracts[0]?.id);""",
-        """      fillSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
-      fillSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
-      fillSelect("adjustDueContract", allContractOptions, lastUserContractId || "");""",
+        """      fillGroupedContractSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillGroupedContractSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillGroupedContractSelect("adjustDueContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");""",
         1,
     )
     html = html.replace(
