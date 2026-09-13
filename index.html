@@ -19230,13 +19230,16 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       // Contract selectors show Contract ID, Type of Contract, Contract Name, and Department for easier search.
       // Owner, Department, Stage and Status remain linked in the background only.
       const accessibleContracts = contractsVisibleToCurrentUser();
-      const contractOptions = [
+      const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
+      const contractOptionsFor = items => [
         { value: "", label: "Select Contract / เลือกสัญญา" },
-        ...accessibleContracts.map(item => ({
+        ...items.map(item => ({
           value: item.id,
           label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
         }))
       ];
+      const openContractOptions = contractOptionsFor(openContracts);
+      const allContractOptions = contractOptionsFor(accessibleContracts);
       const workTypes = orderedUniqueList([...Object.keys(fixedSlaConfig), ...uniqueWorkTypes()]);
       const contractCatalog = getContractFormCatalog();
       const contractTypes = orderedUniqueList(contractCatalog.map(item => item.type).filter(Boolean));
@@ -19249,9 +19252,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       fillDatalist("peopleOptions", directoryPeopleOptions());
       fillDatalist("workTypeOptions", workTypes);
       syncDepartmentOwnerOptions(false);
-      fillSelect("updateContract", contractOptions, lastUserContractId || "");
-      fillSelect("closeContract", contractOptions, lastUserContractId || "");
-      fillSelect("adjustDueContract", contractOptions, lastUserContractId || "");
+      fillSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillSelect("adjustDueContract", allContractOptions, lastUserContractId || "");
       ["updateContract", "closeContract", "adjustDueContract"].forEach(selectId => {
         const select = document.querySelector(`#${selectId}`);
         if (!select) return;
@@ -19271,7 +19274,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           option.selected = currentSelected.length ? currentSelected.includes(option.value) : true;
         });
       }
-      if (lastUserContractId && accessibleContracts.some(item => item.id === lastUserContractId)) {
+      if (lastUserContractId && openContracts.some(item => item.id === lastUserContractId)) {
         document.querySelector("#updateContract").value = lastUserContractId;
         document.querySelector("#closeContract").value = lastUserContractId;
       }
