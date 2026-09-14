@@ -20705,7 +20705,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
-      // Preserve a local User Case Action until Shared Drive verifies the same version.
+      // Do not let an older auto-refresh replace a User Case Action that has
+      // already been saved locally but is still waiting for Drive verification.
       if (hasUnsyncedLocalChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
@@ -20867,7 +20868,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
       if (!lastCloudDatabaseFingerprint) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · waiting for Shared Drive baseline`);
-        
         return false;
       }
       if (isDriveDatabaseSaveInProgress) {
@@ -20944,7 +20944,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         return;
       }
       clearTimeout(driveDatabaseSaveTimer);
-            driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 120);
+      driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 120);
     }
 
     function refreshDriveDatabaseIfActive() {
@@ -21613,12 +21613,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (saveButton) {
         saveButton.disabled = true;
         saveButton.textContent = "Saving...";
-            saveContractsDatabase();
+      }
+      refreshDatabaseDrivenUi();
+      saveContractsDatabase();
       if (saveButton) saveButton.textContent = "Saved locally · Syncing...";
       showToast("Master Data saved locally · Syncing Shared Drive");
       const verified = await saveDriveDatabaseToCloud();
-      const verified = await saveDriveDatabaseToCloud();
-      refreshDatabaseDrivenUi();
       if (saveButton) {
         saveButton.disabled = false;
         saveButton.textContent = originalLabel;
@@ -21663,7 +21663,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         localStorage.removeItem(localDatabaseKey);
         window.location.reload();
       });
-          function renderAfterUserCaseActionSave() {
+      updateDatabaseSyncStatus();
+    }
+
+    function renderAfterUserCaseActionSave() {
       contracts.forEach(syncContractTimingFromLogs);
       refreshDashboardDataFromContracts();
       rebuildNotificationQueue();
@@ -21671,9 +21674,6 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       populateUserControls();
       renderUserCasePreview();
       syncNavCounts();
-    }
-
-updateDatabaseSyncStatus();
     }
 
     function renderAll() {
@@ -21879,10 +21879,10 @@ updateDatabaseSyncStatus();
       syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.length - 1;
-            renderAfterUserCaseActionSave();
+      selectedLogContractId = id;
       lastUserContractId = id;
       saveContractsDatabase();
-      renderAll();
+      renderAfterUserCaseActionSave();
       setView("user");
       finishUserCaseActionSubmit(formElement, true);
       showToast(`${id} added · SLA ${totalSla} Working Days · Due ${finalDue}`);
@@ -21981,10 +21981,11 @@ updateDatabaseSyncStatus();
         sla: 1,
         delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
         action: "Due Date Adjustment Requested"
-            const draft = buildDueApprovalEmailDraft(request, contract);
+      });
+
+      const draft = buildDueApprovalEmailDraft(request, contract);
       saveContractsDatabase();
       renderAfterUserCaseActionSave();
-      setView("user");
       setView("user");
       finishUserCaseActionSubmit(formElement, true);
       showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);
@@ -22112,10 +22113,10 @@ updateDatabaseSyncStatus();
         correctiveAction,
         days,
         sla
-            renderAfterUserCaseActionSave();
+      });
 
       saveContractsDatabase();
-      renderAll();
+      renderAfterUserCaseActionSave();
       setView("user");
       showToast(`${contractId} updated · ${uploadedAttachments.length} file(s) · Email popup opened`);
       openStatusEmailPopup(emailDraft);
@@ -22192,10 +22193,10 @@ updateDatabaseSyncStatus();
         body: emailBodyLines.join("\n"),
         attachments: emailAttachments,
         contractId: contract.id,
-              renderAfterUserCaseActionSave();
+        action: stage
       };
       saveContractsDatabase();
-      renderAll();
+      renderAfterUserCaseActionSave();
       setView("user");
       finishUserCaseActionSubmit(formElement, true);
       showToast(`${id} closed · Email popup opened`);
