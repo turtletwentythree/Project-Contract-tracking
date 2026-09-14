@@ -20944,7 +20944,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         return;
       }
       clearTimeout(driveDatabaseSaveTimer);
-      driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 800);
+            driveDatabaseSaveTimer = window.setTimeout(saveDriveDatabaseToCloud, 120);
     }
 
     function refreshDriveDatabaseIfActive() {
@@ -21613,9 +21613,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (saveButton) {
         saveButton.disabled = true;
         saveButton.textContent = "Saving...";
-      }
-      refreshDatabaseDrivenUi();
-      saveContractsDatabase({ syncCloud: false });
+            saveContractsDatabase();
+      if (saveButton) saveButton.textContent = "Saved locally · Syncing...";
+      showToast("Master Data saved locally · Syncing Shared Drive");
+      const verified = await saveDriveDatabaseToCloud();
       const verified = await saveDriveDatabaseToCloud();
       refreshDatabaseDrivenUi();
       if (saveButton) {
@@ -21662,7 +21663,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         localStorage.removeItem(localDatabaseKey);
         window.location.reload();
       });
-      updateDatabaseSyncStatus();
+          function renderAfterUserCaseActionSave() {
+      contracts.forEach(syncContractTimingFromLogs);
+      refreshDashboardDataFromContracts();
+      rebuildNotificationQueue();
+      renderDashboardSummary();
+      populateUserControls();
+      renderUserCasePreview();
+      syncNavCounts();
+    }
+
+updateDatabaseSyncStatus();
     }
 
     function renderAll() {
@@ -21868,7 +21879,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       syncContractTimingFromLogs(contract);
       upsertDashboardData(contract);
       selectedContractIndex = contracts.length - 1;
-      selectedLogContractId = id;
+            renderAfterUserCaseActionSave();
       lastUserContractId = id;
       saveContractsDatabase();
       renderAll();
@@ -21970,12 +21981,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         sla: 1,
         delayReason: `Requested Due Date ${requestedDue}: ${reason}`,
         action: "Due Date Adjustment Requested"
-      });
-
-      const draft = buildDueApprovalEmailDraft(request, contract);
-      saveContractsDatabase({ syncCloud: false });
-      await saveDriveDatabaseToCloud();
-      renderAll();
+            const draft = buildDueApprovalEmailDraft(request, contract);
+      saveContractsDatabase();
+      renderAfterUserCaseActionSave();
+      setView("user");
       setView("user");
       finishUserCaseActionSubmit(formElement, true);
       showToast(`${request.requestId} created · Pending Admin Review · Due Date unchanged`);
@@ -22103,7 +22112,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         correctiveAction,
         days,
         sla
-      });
+            renderAfterUserCaseActionSave();
 
       saveContractsDatabase();
       renderAll();
@@ -22183,7 +22192,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         body: emailBodyLines.join("\n"),
         attachments: emailAttachments,
         contractId: contract.id,
-        action: stage
+              renderAfterUserCaseActionSave();
       };
       saveContractsDatabase();
       renderAll();
