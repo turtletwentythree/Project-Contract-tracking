@@ -19243,15 +19243,26 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       // Owner, Department, Stage and Status remain linked in the background only.
       const accessibleContracts = contractsVisibleToCurrentUser();
       const openContracts = accessibleContracts.filter(item => !isClosedAction(item.stage) && !isClosedAction(item.status));
-      const contractOptionsFor = items => items
+      const closeCaseGroupFor = item => {
+        const statusText = `${item.stage || ""} ${item.status || ""}`.toLowerCase();
+        if (statusText.includes("cancel")) return { order: 2, label: "Cancelled / ยกเลิก" };
+        if (isClosedAction(item.stage) || isClosedAction(item.status)) return { order: 1, label: "Completed / เสร็จสมบูรณ์" };
+        return { order: 0, label: "Open / กำลังดำเนินการ" };
+      };
+      const contractOptionsFor = (items, groupByCloseStatus = false) => items
         .slice()
-        .sort((left, right) => String(left.department || "").localeCompare(String(right.department || ""), "en", { sensitivity: "base" })
+        .sort((left, right) => (groupByCloseStatus ? closeCaseGroupFor(left).order - closeCaseGroupFor(right).order : 0)
+          || String(left.department || "").localeCompare(String(right.department || ""), "en", { sensitivity: "base" })
           || String(left.id || "").localeCompare(String(right.id || ""), "en", { numeric: true }))
-        .map(item => ({
-          value: item.id,
-          group: String(item.department || "Unassigned / ไม่ระบุแผนก").trim(),
-          label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
-        }));
+        .map(item => {
+          const department = String(item.department || "Unassigned / ไม่ระบุแผนก").trim();
+          const statusGroup = closeCaseGroupFor(item);
+          return {
+            value: item.id,
+            group: groupByCloseStatus ? `${statusGroup.label} | ${department}` : department,
+            label: [item.id, contractPrimaryTypeDisplay(item.type), item.name, item.department].map(value => String(value || "").trim()).filter(Boolean).join(" / ")
+          };
+        });
       const fillGroupedContractSelect = (id, options, fallback = "") => {
         const select = document.querySelector(`#${id}`);
         if (!select) return;
@@ -19267,6 +19278,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           + [...groups.entries()].map(([group, groupOptions]) => `<optgroup label="${escapeHtml(group)}">${optionRows(groupOptions, selected)}</optgroup>`).join("");
       };
       const openContractOptions = contractOptionsFor(openContracts);
+      const closeContractOptions = contractOptionsFor(accessibleContracts, true);
       const workTypes = orderedUniqueList([...Object.keys(fixedSlaConfig), ...uniqueWorkTypes()]);
       const contractCatalog = getContractFormCatalog();
       const contractTypes = orderedUniqueList(contractCatalog.map(item => item.type).filter(Boolean));
@@ -19280,7 +19292,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       fillDatalist("workTypeOptions", workTypes);
       syncDepartmentOwnerOptions(false);
       fillGroupedContractSelect("updateContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
-      fillGroupedContractSelect("closeContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
+      fillGroupedContractSelect("closeContract", closeContractOptions, accessibleContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
       fillGroupedContractSelect("adjustDueContract", openContractOptions, openContracts.some(item => item.id === lastUserContractId) ? lastUserContractId : "");
       ["updateContract", "closeContract", "adjustDueContract"].forEach(selectId => {
         const select = document.querySelector(`#${selectId}`);
@@ -20226,6 +20238,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
     let lastCloudDatabaseFingerprint = "";
+    let hasUnsyncedLocalChanges = false;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -20551,6 +20564,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           dueDateAdjustmentRequests,
           masterData
         }));
+        hasUnsyncedLocalChanges = true;
+        lastDriveDatabaseRefreshAt = Date.now();
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally`);
         if (options.syncCloud !== false) scheduleDriveDatabaseSave();
       } catch (error) {
@@ -20690,6 +20705,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
+      // Preserve a local User Case Action until Shared Drive verifies the same version.
+      if (hasUnsyncedLocalChanges && !options.expectedFingerprint) return false;
       const contractText = payload.contractsCsvText || payload.files?.contracts?.text || "";
       const logText = payload.logsCsvText || payload.files?.logs?.text || "";
       const typeMasterText = payload.typeMasterCsvText || payload.files?.typeMaster?.text || "";
@@ -20765,6 +20782,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        masterData
 	      }));
       isApplyingDriveDatabaseLoad = false;
+      hasUnsyncedLocalChanges = false;
       if (migratedSlaCount || migratedDepartmentCount || migratedActionCount || migratedPendingDueRequestCount) scheduleDriveDatabaseSave();
       refreshDatabaseDrivenUi();
       updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
@@ -20848,8 +20866,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const endpoint = driveDatabaseEndpoint();
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
       if (!lastCloudDatabaseFingerprint) {
-        updateDatabaseSyncStatus("Reload Shared Drive before saving");
-        await loadDriveDatabaseFromCloud({ force: true });
+        updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · waiting for Shared Drive baseline`);
+        
         return false;
       }
       if (isDriveDatabaseSaveInProgress) {
@@ -20930,7 +20948,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function refreshDriveDatabaseIfActive() {
-      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (!currentUser || document.hidden || hasUnsyncedLocalChanges || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
       if (Date.now() - lastDriveDatabaseRefreshAt < 2000) return;
       loadDriveDatabaseFromCloud({ silent: true, force: true });
     }
