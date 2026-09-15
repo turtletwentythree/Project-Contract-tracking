@@ -1625,6 +1625,28 @@
       box-shadow: 0 1px 0 rgba(31, 78, 120, .22);
     }
 
+    .contract-department-group td {
+      position: sticky;
+      top: 37px;
+      z-index: 2;
+      padding: 8px 10px;
+      border-top: 1px solid #cbd5a4;
+      border-bottom: 1px solid #dfe5c8;
+      background: #f1f5df;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .contract-department-group td strong {
+      margin-right: 8px;
+    }
+
+    .contract-department-group td span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
     tr.interactive {
       cursor: pointer;
     }
@@ -7240,14 +7262,22 @@
                   <label class="form-field">
                     <span class="update-numbered-heading">
                       <span class="section-index" aria-hidden="true">3</span>
+                      <span class="bilingual-stack update-bilingual-label"><span class="en">From<span class="field-required-mark" aria-hidden="true">*</span></span><span class="th">ส่งจาก<span class="field-required-mark" aria-hidden="true">*</span></span></span>
+                    </span>
+                    <input class="input" name="from" id="updateFrom" list="peopleOptions" required autocomplete="off" placeholder="Contract Owner&#10;เจ้าของสัญญา" aria-label="From / ส่งจาก">
+                  </label>
+
+                  <label class="form-field">
+                    <span class="update-numbered-heading">
+                      <span class="section-index" aria-hidden="true">4</span>
                       <span class="bilingual-stack update-bilingual-label"><span class="en">To<span class="field-required-mark" aria-hidden="true">*</span></span><span class="th">ส่งถึง<span class="field-required-mark" aria-hidden="true">*</span></span></span>
                     </span>
-                    <input class="input" name="to" id="updateTo" list="peopleOptions" required autocomplete="off" placeholder="Select or type the recipient&#10;เลือกหรือพิมพ์ชื่อผู้รับ" aria-label="To / ส่งถึง">
+                    <input class="input" name="to" id="updateTo" list="peopleOptions" required autocomplete="off" placeholder="Select To&#10;เลือกผู้รับ" aria-label="To / ส่งถึง">
                   </label>
 
                   <div class="form-field full update-cc-field" id="updateCcField" hidden aria-hidden="true">
                     <label class="update-numbered-heading" for="updateCcInput">
-                      <span class="section-index" aria-hidden="true">4</span>
+                      <span class="section-index" aria-hidden="true">5</span>
                       <span class="bilingual-stack update-bilingual-label">
                         <span class="en">CC Email</span>
                         <span class="th">สำเนาอีเมล</span>
@@ -7270,7 +7300,7 @@
 
                   <label class="reason-status-panel dynamic-reason-panel full" id="updateActionReasonField" hidden>
                     <span class="update-numbered-heading">
-                      <span class="section-index" aria-hidden="true">5</span>
+                      <span class="section-index" aria-hidden="true">6</span>
                       <span class="bilingual-field-label update-reason-label">
                         <span class="en"><strong id="updateActionReasonLabelEn">Return Reason</strong><span class="reason-required-mark is-visible" id="updateActionReasonRequiredEn">*</span></span>
                         <span class="th"><strong id="updateActionReasonLabelTh">เหตุผลที่ส่งกลับ</strong><span class="reason-required-mark is-visible" id="updateActionReasonRequiredTh">*</span></span>
@@ -7287,7 +7317,7 @@
                   <div class="form-field full update-attachment-section" id="updateAttachmentSection" tabindex="-1">
                     <div class="attachment-heading">
                       <span class="update-numbered-heading">
-                        <span class="section-index" aria-hidden="true">6</span>
+                        <span class="section-index" aria-hidden="true">7</span>
                         <span class="bilingual-stack update-bilingual-label">
                           <span class="en"><span id="updateAttachmentLabelEn">Attachments</span></span>
                           <span class="th"><span id="updateAttachmentLabelTh">ไฟล์แนบ</span></span>
@@ -7318,7 +7348,6 @@
                   </div>
 
                   <!-- System-controlled values: not displayed as user input fields. -->
-                  <input type="hidden" name="from" id="updateFrom">
                   <input type="hidden" name="toEmail" id="updateToEmail">
                   <span id="updateEmailLinkState" hidden></span>
                   <input type="hidden" name="sla" id="updateSla" value="5">
@@ -16112,15 +16141,24 @@
           && matchesContractMasterFilter(latestStationOwner, filters.stationOwner)
           && (!filters.dueDateFrom || dateToInputValue(item.due) >= filters.dueDateFrom)
           && (!filters.dueDateTo || dateToInputValue(item.due) <= filters.dueDateTo);
-      });
-      const rows = visibleContracts.map(item => {
+      }).sort((left, right) =>
+        String(left.department || "Unassigned").localeCompare(String(right.department || "Unassigned"))
+        || String(left.id || "").localeCompare(String(right.id || ""))
+      );
+      const rows = visibleContracts.map((item, index) => {
         const latestLog = latestLogFor(item.id);
         const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;
         const latestLogButton = latestLog
           ? logRouteLink(latestLog)
           : stationOwnerLink(item.station, item.id);
         const latestStationOwnerButton = stationOwnerNameLink(latestStationOwner, item.id, latestLog);
-        return `
+        const department = String(item.department || "Unassigned");
+        const previousDepartment = index > 0 ? String(visibleContracts[index - 1].department || "Unassigned") : "";
+        const departmentCount = visibleContracts.filter(contract => String(contract.department || "Unassigned") === department).length;
+        const departmentRow = department !== previousDepartment
+          ? `<tr class="contract-department-group"><td colspan="13"><strong>${escapeHtml(department)}</strong><span>${departmentCount} contract(s)</span></td></tr>`
+          : "";
+        return `${departmentRow}
           <tr>
             <td><span class="contract-id">${item.id}</span></td>
             <td>${item.name}</td>
@@ -19901,10 +19939,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (updateContract && updateForm) {
         document.querySelector("#updateContractSummary").innerHTML = contractSummaryMarkup(updateContract, { showStatusUpdate: true });
         const currentStation = stationParts(updateContract.station);
-        updateForm.elements.from.value = currentStation.to || updateContract.owner || "";
+        updateForm.elements.from.value = updateContract.owner || "";
         const boundId = updateForm.dataset.boundContractId;
         if (force || boundId !== updateContract.id) {
-          updateForm.elements.to.value = currentStation.to || updateContract.owner || "";
+          updateForm.elements.to.value = "";
           const latest = latestLogFor(updateContract.id);
           const runtimeIn = latest?.[7] || latest?.[6] || todayInputValue();
           const runtimeOut = todayInputValue();
@@ -21604,28 +21642,24 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       renderMasterData();
     }
 
-    async function saveMasterDataFromUi() {
+    function saveMasterDataFromUi() {
       if (!requireSystemAdministrator()) return;
       if (!window.confirm("Confirm save Master Data to Database?")) return;
       if (!normalizeMasterDataFromUi()) return;
       const saveButton = document.querySelector("#saveMasterDataBtn");
       const originalLabel = saveButton?.textContent || "Save Master Data";
-      if (saveButton) {
-        saveButton.disabled = true;
-        saveButton.textContent = "Saving...";
-      }
       refreshDatabaseDrivenUi();
-      saveContractsDatabase();
-      if (saveButton) saveButton.textContent = "Saved locally · Syncing...";
-      showToast("Master Data saved locally · Syncing Shared Drive");
-      const verified = await saveDriveDatabaseToCloud();
+      saveContractsDatabase({ syncCloud: false });
       if (saveButton) {
         saveButton.disabled = false;
         saveButton.textContent = originalLabel;
       }
-      notifyDatabaseSaved(verified
-        ? "Master Data saved and refreshed from Shared Drive."
-        : "Master Data saved locally. Shared Drive verification is pending.");
+      showToast("Master Data saved · Syncing Shared Drive");
+      saveDriveDatabaseToCloud().then(verified => {
+        updateDatabaseSyncStatus(verified
+          ? `${contracts.length} contracts · Master Data synced with Shared Drive`
+          : `${contracts.length} contracts · Master Data saved locally · Cloud verification pending`);
+      });
     }
 
     function setupMasterDataControls() {
