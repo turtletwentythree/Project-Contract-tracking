@@ -7264,7 +7264,7 @@
                       <span class="section-index" aria-hidden="true">3</span>
                       <span class="bilingual-stack update-bilingual-label"><span class="en">From<span class="field-required-mark" aria-hidden="true">*</span></span><span class="th">ส่งจาก<span class="field-required-mark" aria-hidden="true">*</span></span></span>
                     </span>
-                    <input class="input" name="from" id="updateFrom" list="peopleOptions" required autocomplete="off" placeholder="Contract Owner&#10;เจ้าของสัญญา" aria-label="From / ส่งจาก">
+                    <input class="input" name="from" id="updateFrom" list="peopleOptions" required autocomplete="off" placeholder="Select or type From&#10;เลือกหรือพิมพ์ผู้ส่ง" aria-label="From / ส่งจาก">
                   </label>
 
                   <label class="form-field">
@@ -19187,6 +19187,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       attachEditableDropdown("addContractSubType", contractSubTypeDropdownOptions, () => syncAddCaseLinkedFields("subType"), {
         ariaLabel: "Sub Type of Contract / ประเภทย่อยของสัญญา"
       });
+      attachEditableDropdown("updateFrom", () => directoryEmployeeOptions());
       attachEditableDropdown("updateTo", () => directoryEmployeeOptions(), () => syncUpdateRecipientEmail(true));
 
       document.addEventListener("click", event => {
@@ -21642,24 +21643,57 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       renderMasterData();
     }
 
-    function saveMasterDataFromUi() {
-      if (!requireSystemAdministrator()) return;
-      if (!window.confirm("Confirm save Master Data to Database?")) return;
-      if (!normalizeMasterDataFromUi()) return;
-      const saveButton = document.querySelector("#saveMasterDataBtn");
-      const originalLabel = saveButton?.textContent || "Save Master Data";
+    let masterDataAutoSaveTimer = 0;
+    let masterDataSaveLabelTimer = 0;
+
+    function persistMasterDataFromUi(options = {}) {
+      if (!requireSystemAdministrator()) return false;
+      if (!normalizeMasterDataFromUi()) return false;
       refreshDatabaseDrivenUi();
-      saveContractsDatabase({ syncCloud: false });
-      if (saveButton) {
-        saveButton.disabled = false;
-        saveButton.textContent = originalLabel;
-      }
-      showToast("Master Data saved · Syncing Shared Drive");
-      saveDriveDatabaseToCloud().then(verified => {
-        updateDatabaseSyncStatus(verified
-          ? `${contracts.length} contracts · Master Data synced with Shared Drive`
-          : `${contracts.length} contracts · Master Data saved locally · Cloud verification pending`);
+      saveContractsDatabase();
+      const saveButton = document.querySelector("#saveMasterDataBtn");
+      window.clearTimeout(masterDataSaveLabelTimer);
+      if (saveButton) saveButton.textContent = "Saved / บันทึกแล้ว";
+      masterDataSaveLabelTimer = window.setTimeout(() => {
+        if (saveButton) saveButton.textContent = "Save Master Data";
+      }, 1400);
+      if (options.announce !== false) showToast("Master Data saved · Shared Drive sync queued");
+      return true;
+    }
+
+    function saveMasterDataFromUi() {
+      persistMasterDataFromUi({ announce: true });
+    }
+
+    function masterRowReadyForAutoSave(control) {
+      const row = control?.closest("tr");
+      const body = row?.parentElement;
+      if (!row || !body) return false;
+      const requiredFields = ({
+        masterContractRows: ["id", "name"],
+        masterConfidentialContractRows: ["id", "name"],
+        masterLogRows: ["contractId", "logNo", "cycle", "from", "to", "inDate", "sla", "action"],
+        masterDepartmentRows: ["Department / Restaurant"],
+        masterPeopleRows: ["name"],
+        masterContractTypeRows: ["Contract Classification"],
+        masterActionSlaRows: ["Action"],
+        masterTemplateRows: ["name"]
+      })[body.id] || [];
+      return requiredFields.every(field => {
+        const fieldControl = [...row.querySelectorAll("[data-master-field]")]
+          .find(item => item.dataset.masterField === field);
+        return String(fieldControl?.value || "").trim();
       });
+    }
+
+    function scheduleMasterDataAutoSave(control) {
+      if (!masterRowReadyForAutoSave(control)) return;
+      window.clearTimeout(masterDataAutoSaveTimer);
+      const saveButton = document.querySelector("#saveMasterDataBtn");
+      if (saveButton) saveButton.textContent = "Saving... / กำลังบันทึก";
+      masterDataAutoSaveTimer = window.setTimeout(() => {
+        persistMasterDataFromUi({ announce: false });
+      }, 180);
     }
 
     function setupMasterDataControls() {
@@ -21667,7 +21701,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       document.querySelectorAll("[data-add-master-row]").forEach(button => {
         button.addEventListener("click", () => addMasterRow(button.dataset.addMasterRow));
       });
-      document.querySelector("#master")?.addEventListener("click", event => {
+      const masterView = document.querySelector("#master");
+      masterView?.addEventListener("change", event => {
+        const control = event.target.closest("[data-master-field]");
+        if (control) scheduleMasterDataAutoSave(control);
+      });
+      masterView?.addEventListener("click", event => {
         const importButton = event.target.closest("[data-master-import]");
         if (importButton) {
           openMasterImportPicker(importButton.dataset.masterImport);
@@ -21681,6 +21720,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         const removeButton = event.target.closest("[data-remove-master-row]");
         if (!removeButton) return;
         removeButton.closest("tr")?.remove();
+        window.clearTimeout(masterDataAutoSaveTimer);
+        masterDataAutoSaveTimer = window.setTimeout(() => {
+          persistMasterDataFromUi({ announce: false });
+        }, 0);
       });
       renderMasterData();
     }
