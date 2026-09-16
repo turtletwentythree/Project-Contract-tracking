@@ -19940,9 +19940,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (updateContract && updateForm) {
         document.querySelector("#updateContractSummary").innerHTML = contractSummaryMarkup(updateContract, { showStatusUpdate: true });
         const currentStation = stationParts(updateContract.station);
-        updateForm.elements.from.value = updateContract.owner || "";
         const boundId = updateForm.dataset.boundContractId;
         if (force || boundId !== updateContract.id) {
+          updateForm.elements.from.value = updateContract.owner || "";
           updateForm.elements.to.value = "";
           const latest = latestLogFor(updateContract.id);
           const runtimeIn = latest?.[7] || latest?.[6] || todayInputValue();
