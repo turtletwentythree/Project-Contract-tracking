@@ -15435,7 +15435,7 @@
       logRecords.forEach(row => {
         row[12] = migrateAction(row[12]);
         row[8] = Number(row[8]) || 0;
-        row[9] = calculateDaysOnHand(row[6], row[7]);
+        row[9] = calculateActionDaysOnHand(row[12], row[6], row[7]);
         row[10] = calculateAlert(row[12], row[9], row[8]);
         row[13] = row[13] || `${row[12]} by system`;
         row[14] = row[14] || "OK";
@@ -15507,12 +15507,13 @@
       if (text.includes("Black") || /(^|[^A-Z])B\s*=/.test(text)) return "B";
       if (text.includes("Red") || /(^|[^A-Z])R\s*=/.test(text)) return "R";
       if (text.includes("Yellow") || /(^|[^A-Z])Y\s*=/.test(text)) return "Y";
+      if (text.includes("Gray") || /(^|[^A-Z])U\s*=/.test(text)) return "U";
       return "G";
     }
 
     function statusTone(value) {
       const code = statusCodeFor(value);
-      return code === "R" ? "red" : code === "Y" ? "amber" : code === "B" ? "black" : "green";
+      return code === "R" ? "red" : code === "Y" ? "amber" : code === "B" ? "black" : code === "U" ? "gray" : "green";
     }
 
     function closedStatusLabel(value) {
@@ -15524,6 +15525,7 @@
       if (code === "B") return closedStatusLabel(value);
       if (code === "R") return "R=At Risk";
       if (code === "Y") return "Y=Delayed";
+      if (code === "U") return "U=Uncontrol";
       return "G=On Track";
     }
 
@@ -15642,7 +15644,7 @@
                     <td>${escapeHtml(formatDate(row[6]))}</td>
                     <td>${row[7] ? escapeHtml(formatDate(row[7])) : ""}</td>
                     <td>${escapeHtml(row[8])}</td>
-                    <td>${escapeHtml(row[9])}</td>
+                    <td>${escapeHtml(displayActionDaysOnHand(row))}</td>
                     <td>${alertBadge(row[10])}</td>
                     <td>${escapeHtml(row[11] || "-")}</td>
                     <td>${renderLogActionButton(row)}</td>
@@ -16323,7 +16325,7 @@
             <td>${formatDate(row[6])}</td>
             <td>${row[7] ? formatDate(row[7]) : ""}</td>
             <td>${row[8]}</td>
-            <td>${row[9]}</td>
+            <td>${escapeHtml(displayActionDaysOnHand(row))}</td>
             <td>${alertBadge(row[10])}</td>
             <td>${escapeHtml(row[11] || "-")}</td>
             <td>${renderLogActionButton(row)}</td>
@@ -18091,7 +18093,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function alertCodeFor(alert) {
-      return alert.includes("Black") ? "B" : alert.includes("Red") ? "R" : alert.includes("Yellow") ? "Y" : "G";
+      return alert.includes("Black") ? "B" : alert.includes("Red") ? "R" : alert.includes("Yellow") ? "Y" : alert.includes("Gray") ? "U" : "G";
     }
 
     function normalizeDateOnly(dateValue) {
@@ -18125,11 +18127,24 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return workingDays;
     }
 
+    function isUncontrolledAction(action) {
+      return migrateAction(action) === "Forward";
+    }
+
+    function calculateActionDaysOnHand(action, inDate, outDate = "") {
+      return isUncontrolledAction(action) ? 0 : calculateDaysOnHand(inDate, outDate);
+    }
+
+    function displayActionDaysOnHand(row) {
+      return isUncontrolledAction(row?.[12]) ? "-" : String(Number(row?.[9]) || 0);
+    }
+
     function calculateAlert(action, daysOnHand, sla) {
       const numericSla = Number(sla) || 0;
       const currentDays = Number(daysOnHand) || 0;
       if (isCancelledStatus(action)) return "Black >>B=Cancelled";
       if (isCompletedStatus(action)) return "Black >>B=Completed";
+      if (isUncontrolledAction(action)) return "Gray >>U=Uncontrol";
       // Start the yellow warning one working day before the Action SLA.
       if (currentDays < Math.max(0, numericSla - 1)) {
         return "Green >>G=On Track";
@@ -18397,7 +18412,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       // is still open. Treat that handoff date as day 0 for the active station.
       const timingStart = isCurrentAction && row[7] ? row[7] : row[6];
       const timingEnd = isCurrentAction ? "" : row[7];
-      row[9] = calculateDaysOnHand(timingStart, timingEnd);
+      row[9] = calculateActionDaysOnHand(row[12], timingStart, timingEnd);
       row[10] = calculateAlert(row[12], row[9], row[8]);
       return row;
     }
@@ -18446,7 +18461,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       updatedBy = currentUser.name || "Current User", updatedAt = localIsoDateTime()
     }) {
       const logNo = logRecords.filter(row => row[0] === contractId).length + 1;
-      const days = calculateDaysOnHand(inDate, outDate);
+      const days = calculateActionDaysOnHand(action, inDate, outDate);
       const alert = calculateAlert(action, days, sla);
       const record = [
         contractId,
@@ -19971,7 +19986,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const inDate = form.elements.inDate?.value || "";
       const outDate = form.elements.outDate?.value || "";
       const sla = form.elements.sla?.value || 0;
-      const days = calculateDaysOnHand(inDate, outDate);
+      const days = calculateActionDaysOnHand(action, inDate, outDate);
       const alert = calculateAlert(action, days, sla);
       return { days, alert };
     }
@@ -21341,7 +21356,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
             <td>${masterInput("inDate", dateToInputValue(row[6]), { type: "date" })}</td>
             <td>${masterInput("outDate", dateToInputValue(row[7]), { type: "date" })}</td>
             <td>${masterInput("sla", row[8], { type: "number" })}</td>
-            <td>${masterReadOnly(row[9])}</td>
+            <td>${masterReadOnly(displayActionDaysOnHand(row))}</td>
             <td>${masterReadOnly(row[10])}</td>
             <td>${masterInput("action", row[12], { select: true, choices: actionChoices })}</td>
             <td>${masterDeleteButton()}</td>
@@ -22102,7 +22117,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const delayReason = "";
       const correctiveAction = "";
       const sla = Number(form.get("sla") || 0);
-      const days = calculateDaysOnHand(runtimeIn);
+      const days = calculateActionDaysOnHand(action, runtimeIn);
       const alert = calculateAlert(action, days, sla);
 
       syncUpdateReasonRequirement(alert);
