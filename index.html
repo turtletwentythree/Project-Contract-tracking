@@ -20293,6 +20293,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let lastAppliedDriveDatabaseLoad = 0;
     let lastCloudDatabaseFingerprint = "";
     let hasUnsyncedLocalChanges = false;
+    let localDatabaseRevision = 0;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -20619,6 +20620,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           masterData
         }));
         hasUnsyncedLocalChanges = true;
+        localDatabaseRevision += 1;
         lastDriveDatabaseRefreshAt = Date.now();
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally`);
         if (options.syncCloud !== false) scheduleDriveDatabaseSave();
@@ -20781,6 +20783,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	          actionSlaCsvText: actionSlaText
 	        });
 	        if (receivedFingerprint !== options.expectedFingerprint) return false;
+        // A save acknowledgement must never replace newer local edits.
+        lastCloudDatabaseFingerprint = receivedCloudFingerprint || receivedFingerprint;
+        if (options.savedRevision === localDatabaseRevision) hasUnsyncedLocalChanges = false;
+        return true;
 	      }
 	      if (typeMasterText) masterData.contractTypes = csvToObjects(typeMasterText);
 	      if (departmentMasterText) masterData.departments = csvToObjects(departmentMasterText);
@@ -20899,7 +20905,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
               finish(false);
               return;
             }
-            const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "" });
+            const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "", savedRevision: options.savedRevision });
             if (applied) lastAppliedDriveDatabaseLoad = loadSequence;
             if (!applied && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
             finish(applied);
@@ -20932,6 +20938,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       driveDatabaseSaveTimer = 0;
       isDriveDatabaseSaveInProgress = true;
       const payload = driveDatabaseCsvPayload();
+      const savedRevision = localDatabaseRevision;
       const expectedFingerprint = driveDatabasePayloadFingerprint(payload);
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
@@ -20942,17 +20949,17 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           headers: { "Content-Type": "text/plain" },
           body: JSON.stringify(payload)
         });
-        const retryDelays = [300, 700, 1200, 2000, 3500];
+        const retryDelays = [0, 700, 1200, 2000, 3500];
         let verified = false;
         for (const delayMs of retryDelays) {
           await new Promise(resolve => window.setTimeout(resolve, delayMs));
-          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint });
+          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint, savedRevision });
           if (verified) break;
         }
         updateDatabaseSyncStatus(verified
-          ? `${contracts.length} contracts saved and refreshed from Shared Drive`
+          ? (hasUnsyncedLocalChanges ? `${contracts.length} contracts saved locally · syncing newer changes` : `${contracts.length} contracts saved to Shared Drive`)
           : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
-        if (verified) await runImmediateLineStatusNotifications();
+        if (verified && !hasUnsyncedLocalChanges) void runImmediateLineStatusNotifications();
         return verified;
       } catch (error) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
@@ -21668,7 +21675,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       saveContractsDatabase();
       const saveButton = document.querySelector("#saveMasterDataBtn");
       window.clearTimeout(masterDataSaveLabelTimer);
-      if (saveButton) saveButton.textContent = "Saved / บันทึกแล้ว";
+      if (saveButton) saveButton.textContent = "Saved locally / บันทึกในเครื่องแล้ว";
       masterDataSaveLabelTimer = window.setTimeout(() => {
         if (saveButton) saveButton.textContent = "Save Master Data";
       }, 1400);
