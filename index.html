@@ -15045,6 +15045,7 @@
       updateDatabaseSyncStatus("Checking Shared Drive for the latest data...");
       const cloudLoaded = await loadDriveDatabaseFromCloud({ force: true });
       startDriveDatabaseAutoRefresh();
+      if (hasUnsyncedLocalChanges) scheduleDriveDatabaseRetry();
       syncAddCaseLinkedFields("init");
       return cloudLoaded;
     }
@@ -20294,6 +20295,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let lastCloudDatabaseFingerprint = "";
     let hasUnsyncedLocalChanges = false;
     let localDatabaseRevision = 0;
+    let driveDatabaseRetryTimer = 0;
+    let driveDatabaseRetryAttempt = 0;
 
     function csvCell(value) {
       let text = value == null ? "" : value;
@@ -20607,6 +20610,38 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return idMap.size;
     }
 
+    function persistDriveDatabaseSyncState() {
+      try {
+        const raw = localStorage.getItem(localDatabaseKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        parsed.cloudFingerprint = lastCloudDatabaseFingerprint || "";
+        parsed.pendingCloudSync = Boolean(hasUnsyncedLocalChanges);
+        parsed.localDatabaseRevision = Number(localDatabaseRevision || 0);
+        parsed.syncStateUpdatedAt = localIsoDateTime();
+        localStorage.setItem(localDatabaseKey, JSON.stringify(parsed));
+      } catch (error) {
+        console.warn("Local sync state could not be saved.", error);
+      }
+    }
+
+    function clearDriveDatabaseRetry() {
+      window.clearTimeout(driveDatabaseRetryTimer);
+      driveDatabaseRetryTimer = 0;
+      driveDatabaseRetryAttempt = 0;
+    }
+
+    function scheduleDriveDatabaseRetry() {
+      if (!hasUnsyncedLocalChanges || driveDatabaseRetryTimer || isDriveDatabaseSaveInProgress) return;
+      const retryDelays = [2000, 5000, 10000, 30000, 60000];
+      const delayMs = retryDelays[Math.min(driveDatabaseRetryAttempt, retryDelays.length - 1)];
+      driveDatabaseRetryAttempt += 1;
+      driveDatabaseRetryTimer = window.setTimeout(() => {
+        driveDatabaseRetryTimer = 0;
+        saveDriveDatabaseToCloud();
+      }, delayMs);
+    }
+
     function saveContractsDatabase(options = {}) {
       try {
         localStorage.setItem(localDatabaseKey, JSON.stringify({
@@ -20621,6 +20656,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         }));
         hasUnsyncedLocalChanges = true;
         localDatabaseRevision += 1;
+        persistDriveDatabaseSyncState();
         lastDriveDatabaseRefreshAt = Date.now();
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally`);
         if (options.syncCloud !== false) scheduleDriveDatabaseSave();
@@ -20641,6 +20677,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           updateDatabaseSyncStatus();
           return;
         }
+        lastCloudDatabaseFingerprint = String(parsed.cloudFingerprint || "");
+        hasUnsyncedLocalChanges = parsed.pendingCloudSync === true;
+        localDatabaseRevision = Math.max(0, Number(parsed.localDatabaseRevision || 0));
         const parsedContracts = parsed.contracts;
         const parsedLogs = Array.isArray(parsed.logRecords) ? parsed.logRecords : [];
         if (Array.isArray(parsed.dueDateAdjustmentRequests)) {
@@ -20672,7 +20711,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         if (Array.isArray(parsed.logRecords)) logRecords.splice(0, logRecords.length, ...parsedLogs);
         if (migratedCount || migratedSlaCount || migratedDepartmentCount || migratedActionCount) saveContractsDatabase({ syncCloud: false });
         refreshDashboardDataFromContracts();
-        updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}${migratedPendingDueRequestCount ? ` · ${migratedPendingDueRequestCount} Due Date request migrated` : ""}`);
+        updateDatabaseSyncStatus(`${contracts.length} contracts loaded from local DB${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
       } catch (error) {
         updateDatabaseSyncStatus("Local database could not load");
       }
@@ -20785,7 +20824,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        if (receivedFingerprint !== options.expectedFingerprint) return false;
         // A save acknowledgement must never replace newer local edits.
         lastCloudDatabaseFingerprint = receivedCloudFingerprint || receivedFingerprint;
-        if (options.savedRevision === localDatabaseRevision) hasUnsyncedLocalChanges = false;
+        if (options.savedRevision === localDatabaseRevision) {
+          hasUnsyncedLocalChanges = false;
+          clearDriveDatabaseRetry();
+          persistDriveDatabaseSyncState();
+        }
         return true;
 	      }
 	      if (typeMasterText) masterData.contractTypes = csvToObjects(typeMasterText);
@@ -20840,10 +20883,14 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        contracts,
 	        logRecords,
 	        dueDateAdjustmentRequests,
-	        masterData
+	        masterData,
+          cloudFingerprint: lastCloudDatabaseFingerprint,
+          pendingCloudSync: false,
+          localDatabaseRevision
 	      }));
       isApplyingDriveDatabaseLoad = false;
       hasUnsyncedLocalChanges = false;
+      clearDriveDatabaseRetry();
       if (migratedSlaCount || migratedDepartmentCount || migratedActionCount || migratedPendingDueRequestCount) scheduleDriveDatabaseSave();
       refreshDatabaseDrivenUi();
       updateDatabaseSyncStatus(`${contracts.length} contracts loaded from Shared Drive${migratedCount ? ` · ${migratedCount} Contract ID migrated` : ""}${migratedSlaCount ? ` · ${migratedSlaCount} SLA values updated` : ""}${migratedDepartmentCount ? ` · Department Master cleaned` : ""}${migratedActionCount ? ` · Action SLA updated` : ""}`);
@@ -20928,6 +20975,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!endpoint || isApplyingDriveDatabaseLoad) return false;
       if (!lastCloudDatabaseFingerprint) {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · waiting for Shared Drive baseline`);
+        scheduleDriveDatabaseRetry();
         return false;
       }
       if (isDriveDatabaseSaveInProgress) {
@@ -20958,17 +21006,21 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         }
         updateDatabaseSyncStatus(verified
           ? (hasUnsyncedLocalChanges ? `${contracts.length} contracts saved locally · syncing newer changes` : `${contracts.length} contracts saved to Shared Drive`)
-          : `${contracts.length} contracts saved locally · Shared Drive update not verified`);
+          : `${contracts.length} contracts saved locally · Shared Drive update not verified · retrying`);
+        if (!verified || hasUnsyncedLocalChanges) scheduleDriveDatabaseRetry();
         if (verified && !hasUnsyncedLocalChanges) void runImmediateLineStatusNotifications();
         return verified;
       } catch (error) {
-        updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed`);
+        updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · Shared Drive sync failed · retrying`);
+        scheduleDriveDatabaseRetry();
         return false;
       } finally {
         isDriveDatabaseSaveInProgress = false;
         if (driveDatabaseSaveQueued) {
           driveDatabaseSaveQueued = false;
           scheduleDriveDatabaseSave();
+        } else if (hasUnsyncedLocalChanges) {
+          scheduleDriveDatabaseRetry();
         }
       }
     }
@@ -21009,7 +21061,11 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     }
 
     function refreshDriveDatabaseIfActive() {
-      if (!currentUser || document.hidden || hasUnsyncedLocalChanges || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (!currentUser || document.hidden || isDriveDatabaseSaveInProgress || isApplyingDriveDatabaseLoad || driveDatabaseActiveLoads) return;
+      if (hasUnsyncedLocalChanges) {
+        scheduleDriveDatabaseRetry();
+        return;
+      }
       if (Date.now() - lastDriveDatabaseRefreshAt < 2000) return;
       loadDriveDatabaseFromCloud({ silent: true, force: true });
     }
