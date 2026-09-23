@@ -20293,6 +20293,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     let driveDatabaseLoadSequence = 0;
     let lastAppliedDriveDatabaseLoad = 0;
     let lastCloudDatabaseFingerprint = "";
+    let lastCloudDatabasePayload = null;
     let hasUnsyncedLocalChanges = false;
     let localDatabaseRevision = 0;
     let driveDatabaseRetryTimer = 0;
@@ -20616,6 +20617,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         if (!raw) return;
         const parsed = JSON.parse(raw);
         parsed.cloudFingerprint = lastCloudDatabaseFingerprint || "";
+        parsed.cloudBaseline = lastCloudDatabasePayload;
         parsed.pendingCloudSync = Boolean(hasUnsyncedLocalChanges);
         parsed.localDatabaseRevision = Number(localDatabaseRevision || 0);
         parsed.syncStateUpdatedAt = localIsoDateTime();
@@ -20678,6 +20680,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
           return;
         }
         lastCloudDatabaseFingerprint = String(parsed.cloudFingerprint || "");
+        lastCloudDatabasePayload = parsed.cloudBaseline && typeof parsed.cloudBaseline === "object" ? parsed.cloudBaseline : null;
         hasUnsyncedLocalChanges = parsed.pendingCloudSync === true;
         localDatabaseRevision = Math.max(0, Number(parsed.localDatabaseRevision || 0));
         const parsedContracts = parsed.contracts;
@@ -20798,6 +20801,88 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       ].map(key => databaseTextFingerprint(payload?.[key] || "")).join("|");
     }
 
+    const driveDatabaseTextKeys = [
+      "contractsCsvText",
+      "logsCsvText",
+      "typeMasterCsvText",
+      "departmentMasterCsvText",
+      "peopleMasterCsvText",
+      "contractTemplateCsvText",
+      "actionSlaCsvText"
+    ];
+
+    function driveDatabasePayloadTexts(payload) {
+      return Object.fromEntries(driveDatabaseTextKeys.map(key => [key, String(payload?.[key] || "")]));
+    }
+
+    function mergeCsvThreeWay(baseText, localText, remoteText, keyColumns) {
+      const headerRows = [remoteText, localText, baseText].map(text => (parseCsvRows(text)[0] || []).map(value => String(value || "").trim()));
+      const headers = [...new Set(headerRows.flat().filter(Boolean))];
+      if (!headers.length) return "";
+      const rowsFor = text => csvToObjects(text);
+      const keyFor = row => keyColumns.map(column => String(row?.[column] || "").trim()).join("\u001f");
+      const baseRows = rowsFor(baseText);
+      const localRows = rowsFor(localText);
+      const remoteRows = rowsFor(remoteText);
+      const baseMap = new Map(baseRows.map(row => [keyFor(row), row]));
+      const localMap = new Map(localRows.map(row => [keyFor(row), row]));
+      const remoteMap = new Map(remoteRows.map(row => [keyFor(row), row]));
+      const changedKeys = new Set();
+      localMap.forEach((row, key) => {
+        if (!baseMap.has(key) || JSON.stringify(row) !== JSON.stringify(baseMap.get(key))) changedKeys.add(key);
+      });
+      baseMap.forEach((row, key) => {
+        if (!localMap.has(key)) changedKeys.add(key);
+      });
+      changedKeys.forEach(key => {
+        if (localMap.has(key)) remoteMap.set(key, localMap.get(key));
+        else remoteMap.delete(key);
+      });
+      const orderedKeys = remoteRows.map(keyFor).filter((key, index, values) => key && values.indexOf(key) === index && remoteMap.has(key));
+      localRows.map(keyFor).forEach(key => { if (key && remoteMap.has(key) && !orderedKeys.includes(key)) orderedKeys.push(key); });
+      return objectsToCsv(headers, orderedKeys.map(key => remoteMap.get(key)));
+    }
+
+    function mergeDriveDatabasePayload(basePayload, localPayload, remotePayload) {
+      const specs = {
+        contractsCsvText: ["Contract ID"],
+        logsCsvText: ["Contract ID", "Log No"],
+        typeMasterCsvText: ["Contract Classification", "Type of Contract", "Sub Type of Contract"],
+        departmentMasterCsvText: ["Department / Restaurant"],
+        peopleMasterCsvText: ["email", "name"],
+        contractTemplateCsvText: ["classification", "typeGroup", "subType", "name"],
+        actionSlaCsvText: ["Action"]
+      };
+      return Object.fromEntries(driveDatabaseTextKeys.map(key => [
+        key,
+        mergeCsvThreeWay(basePayload?.[key] || "", localPayload?.[key] || "", remotePayload?.[key] || "", specs[key])
+      ]));
+    }
+
+    function rebaseUnsyncedDriveDatabase(remotePayload, localPayload, basePayload) {
+      if (!remotePayload || !localPayload || !basePayload) return false;
+      const merged = mergeDriveDatabasePayload(basePayload, localPayload, remotePayload);
+      const mergedContracts = csvToObjects(merged.contractsCsvText).map(contractFromDbRow).filter(item => item.id && item.name);
+      if (!mergedContracts.length) return false;
+      const mergedLogs = csvToObjects(merged.logsCsvText).map(logFromDbRow).filter(row => String(row?.[0] || "").trim());
+      if (merged.typeMasterCsvText) masterData.contractTypes = csvToObjects(merged.typeMasterCsvText);
+      if (merged.departmentMasterCsvText) masterData.departments = csvToObjects(merged.departmentMasterCsvText);
+      if (merged.peopleMasterCsvText) masterData.people = csvToObjects(merged.peopleMasterCsvText);
+      if (merged.contractTemplateCsvText) masterData.contractTemplates = csvToObjects(merged.contractTemplateCsvText);
+      if (merged.actionSlaCsvText) masterData.actionSla = csvToObjects(merged.actionSlaCsvText);
+      mergedContracts.forEach(item => { item.department = canonicalDepartmentName(item.department); });
+      migrateContractIdsToDepartmentFormat(mergedContracts, mergedLogs);
+      contracts.splice(0, contracts.length, ...mergedContracts);
+      logRecords.splice(0, logRecords.length, ...mergedLogs);
+      refreshDueDateRequestsFromContracts(mergedContracts);
+      lastCloudDatabasePayload = driveDatabasePayloadTexts(remotePayload);
+      lastCloudDatabaseFingerprint = String(remotePayload.databaseFingerprint || driveDatabasePayloadFingerprint(lastCloudDatabasePayload));
+      refreshDatabaseDrivenUi();
+      updateDatabaseSyncStatus(`${contracts.length} contracts merged with the latest Shared Drive data · syncing`);
+      saveContractsDatabase();
+      return true;
+    }
+
     function applyDriveDatabasePayload(payload, options = {}) {
       if (!payload || payload.success === false) return false;
       // Do not let an older auto-refresh replace a User Case Action that has
@@ -20824,6 +20909,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        if (receivedFingerprint !== options.expectedFingerprint) return false;
         // A save acknowledgement must never replace newer local edits.
         lastCloudDatabaseFingerprint = receivedCloudFingerprint || receivedFingerprint;
+        lastCloudDatabasePayload = driveDatabasePayloadTexts(payload);
         if (options.savedRevision === localDatabaseRevision) {
           hasUnsyncedLocalChanges = false;
           clearDriveDatabaseRetry();
@@ -20875,6 +20961,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        contractTemplateCsvText: contractTemplateText,
 	        actionSlaCsvText: actionSlaText
 	      });
+      lastCloudDatabasePayload = driveDatabasePayloadTexts(payload);
 	      localStorage.setItem(localDatabaseKey, JSON.stringify({
 	        savedAt: localIsoDateTime(),
 	        standardSlaDataVersion,
@@ -20885,6 +20972,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 	        dueDateAdjustmentRequests,
 	        masterData,
           cloudFingerprint: lastCloudDatabaseFingerprint,
+          cloudBaseline: lastCloudDatabasePayload,
           pendingCloudSync: false,
           localDatabaseRevision
 	      }));
@@ -20953,8 +21041,13 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
               return;
             }
             const applied = applyDriveDatabasePayload(payload, { expectedFingerprint: options.expectedFingerprint || "", savedRevision: options.savedRevision });
-            if (applied) lastAppliedDriveDatabaseLoad = loadSequence;
-            if (!applied && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
+            let rebased = false;
+            if (!applied && options.expectedFingerprint && options.localPayload && options.basePayload) {
+              rebased = rebaseUnsyncedDriveDatabase(payload, options.localPayload, options.basePayload);
+              if (rebased && options.rebaseState) options.rebaseState.handled = true;
+            }
+            if (applied || rebased) lastAppliedDriveDatabaseLoad = loadSequence;
+            if (!applied && !rebased && !silent) updateDatabaseSyncStatus("Shared Drive database is empty or not updated yet");
             finish(applied);
           } catch (error) {
             if (!silent) updateDatabaseSyncStatus("Shared Drive database could not load");
@@ -20988,6 +21081,9 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       const payload = driveDatabaseCsvPayload();
       const savedRevision = localDatabaseRevision;
       const expectedFingerprint = driveDatabasePayloadFingerprint(payload);
+      const localPayload = driveDatabasePayloadTexts(payload);
+      const basePayload = lastCloudDatabasePayload ? driveDatabasePayloadTexts(lastCloudDatabasePayload) : null;
+      const rebaseState = { handled: false };
       try {
         updateDatabaseSyncStatus(`${contracts.length} contracts saved locally · syncing Shared Drive`);
         await fetch(endpoint, {
@@ -21001,12 +21097,12 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         let verified = false;
         for (const delayMs of retryDelays) {
           await new Promise(resolve => window.setTimeout(resolve, delayMs));
-          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint, savedRevision });
-          if (verified) break;
+          verified = await loadDriveDatabaseFromCloud({ silent: true, expectedFingerprint, savedRevision, localPayload, basePayload, rebaseState });
+          if (verified || rebaseState.handled) break;
         }
         updateDatabaseSyncStatus(verified
           ? (hasUnsyncedLocalChanges ? `${contracts.length} contracts saved locally · syncing newer changes` : `${contracts.length} contracts saved to Shared Drive`)
-          : `${contracts.length} contracts saved locally · Shared Drive update not verified · retrying`);
+          : (rebaseState.handled ? `${contracts.length} contracts merged with newer Shared Drive data · syncing` : `${contracts.length} contracts saved locally · Shared Drive update not verified · retrying`));
         if (!verified || hasUnsyncedLocalChanges) scheduleDriveDatabaseRetry();
         if (verified && !hasUnsyncedLocalChanges) void runImmediateLineStatusNotifications();
         return verified;
@@ -21072,7 +21168,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
 
     function startDriveDatabaseAutoRefresh() {
       window.clearInterval(driveDatabaseRefreshTimer);
-      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 8000);
+      driveDatabaseRefreshTimer = window.setInterval(refreshDriveDatabaseIfActive, 5000);
       if (!document.body.dataset.driveRefreshBound) {
         document.body.dataset.driveRefreshBound = "true";
         window.addEventListener("focus", refreshDriveDatabaseIfActive);
