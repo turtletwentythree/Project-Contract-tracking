@@ -16008,7 +16008,7 @@
     function filteredDashboardContracts() {
       const search = document.querySelector("#dashboardSearch").value.toLowerCase();
       const alert = document.querySelector("#dashboardAlert").value;
-      return contractsVisibleToCurrentUser().filter(item => {
+      return contractsVisibleToCurrentUser().filter(isPendingContract).filter(item => {
         const matchesSearch = [item.id, item.name, item.department, item.vendor].join(" ").toLowerCase().includes(search);
         const matchesAlert = alert === "all" || item.alert === alert;
         return matchesSearch && matchesAlert;
@@ -16041,7 +16041,7 @@
     }
 
     function renderContractDetail() {
-      const visibleContracts = contractsVisibleToCurrentUser();
+      const visibleContracts = contractsVisibleToCurrentUser().filter(isPendingContract);
       let item = contracts[selectedContractIndex];
       if (!item || !visibleContracts.some(contract => contract.id === item.id)) {
         item = visibleContracts[0];
@@ -16083,7 +16083,7 @@
     }
 
     function uniqueContractMasterValues(getter) {
-      return [...new Set(contractsForContractStatus().map(getter).map(value => String(value || "").trim()).filter(Boolean))]
+      return [...new Set(contractsForContractStatus().filter(isPendingContract).map(getter).map(value => String(value || "").trim()).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b));
     }
 
@@ -16133,6 +16133,7 @@
         dueDateTo: document.querySelector("#dueDateToFilter")?.value || ""
       };
       const visibleContracts = contractsForContractStatus().filter(item => {
+        if (!isPendingContract(item)) return false;
         const latestLog = latestLogFor(item.id);
         const latestStationOwner = latestLog ? latestLog[5] : stationParts(item.station).to;
         return matchesContractMasterFilter(item.id, filters.contractId)
@@ -16207,7 +16208,7 @@
       if (!kanban) return;
       const stages = actionList;
       kanban.innerHTML = stages.map(stage => {
-        const cards = contractsForContractStatus().filter(item => item.stage === stage).map(item => `
+        const cards = contractsForContractStatus().filter(isPendingContract).filter(item => item.stage === stage).map(item => `
           <article class="task-card">
             <strong>${item.name}</strong>
             <span class="muted">${item.id} · ${item.department}</span>
