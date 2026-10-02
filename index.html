@@ -6799,16 +6799,6 @@
               <span class="metric-trend"><span class="dot"></span>Is Pending</span>
             </article>
             <article class="metric">
-              <span class="metric-label">2. Completed Last 30 Days</span>
-              <strong class="metric-value" id="metricCompleted">2</strong>
-              <span class="metric-trend"><span class="dot black"></span>ย้อนหลัง 30 วัน / Rolling 30 days</span>
-            </article>
-            <article class="metric">
-              <span class="metric-label">3. Avg Complete Day</span>
-              <strong class="metric-value" id="metricAvgComplete">0</strong>
-              <span class="metric-trend"><span class="dot blue"></span>Total Spending Days</span>
-            </article>
-            <article class="metric">
               <span class="metric-label">4. Overdue Contracts</span>
               <strong class="metric-value" id="metricOverdue">0</strong>
               <span class="metric-trend"><span class="dot red"></span>R = Overdue</span>
@@ -15838,8 +15828,8 @@
     }
 
     function renderDashboardSummary() {
-      const visibleContractIds = new Set(contractsVisibleToCurrentUser().map(item => item.id));
-      const visibleDashboardData = dashboardData.filter(item => visibleContractIds.has(item.id));
+      const visibleContractIds = new Set(contractsVisibleToCurrentUser().filter(isPendingContract).map(item => item.id));
+      const visibleDashboardData = dashboardData.filter(item => visibleContractIds.has(item.id) && item.isPending === 1);
       const visibleSumBy = field => visibleDashboardData.reduce((total, item) => total + (Number(item[field]) || 0), 0);
       const pending = visibleSumBy("isPending");
       const completed = visibleSumBy("isCompletedLast30Days");
@@ -15863,8 +15853,8 @@
       ).size;
 
       document.querySelector("#metricPending").textContent = pending;
-      document.querySelector("#metricCompleted").textContent = completed;
-      document.querySelector("#metricAvgComplete").textContent = formatNumber(avgComplete);
+      document.querySelector("#metricCompleted")?.replaceChildren(String(completed));
+      document.querySelector("#metricAvgComplete")?.replaceChildren(formatNumber(avgComplete));
       document.querySelector("#metricOverdue").textContent = overdue;
 
       const deptSpend = departments.map(department => ({
