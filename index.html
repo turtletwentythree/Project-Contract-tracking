@@ -18171,8 +18171,13 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       return isCancelledStatus(action) || isCompletedStatus(action);
     }
 
+    function effectiveContractAction(contract) {
+      if (!contract) return "";
+      return latestLogFor(contract.id)?.[12] || contract.stage || "";
+    }
+
     function isPendingContract(contract) {
-      return !isClosedAction(contract.stage);
+      return !isClosedAction(effectiveContractAction(contract));
     }
 
     function isClosedStage(stage) {
@@ -18210,8 +18215,8 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
         alertCode: alertCodeFor(item.alert),
         totalSpendingDays: item.used,
         isPending: closed ? 0 : 1,
-        isCompletedLast30Days: isCompletedStatus(item.stage) && isWithinLast30Days(closeDate) ? 1 : 0,
-        isCancelled: isCancelledStatus(item.stage) ? 1 : 0,
+        isCompletedLast30Days: isCompletedStatus(effectiveContractAction(item)) && isWithinLast30Days(closeDate) ? 1 : 0,
+        isCancelled: isCancelledStatus(effectiveContractAction(item)) ? 1 : 0,
         isOverdue: !closed && statusCodeFor(item.status) === "R" ? 1 : 0,
         currentTo: stationParts(item.station).to,
         deptBucket: deptBucketFor(item),
@@ -18381,7 +18386,7 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       if (!contract) return 0;
       const startDate = addCaseStartDateForContract(contract);
       if (!startDate) return Number(contract.used || contract.days || 0) || 0;
-      if (isClosedAction(contract.stage)) {
+      if (isClosedAction(effectiveContractAction(contract))) {
         const closeDate = latestCloseDate(contract.id);
         return closeDate ? calculateDaysOnHand(startDate, closeDate) : Number(contract.used || contract.days || 0) || 0;
       }
@@ -18412,9 +18417,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
     function syncContractTimingFromLogs(contract) {
       if (!contract) return contract;
       const rows = logRecords.filter(row => row[0] === contract.id);
-      const contractIsOpen = !isClosedAction(contract.stage);
-      rows.forEach((row, index) => recalculateLogTiming(row, contractIsOpen && index === rows.length - 1));
       const latest = rows.slice(-1)[0] || null;
+      const effectiveAction = latest?.[12] || contract.stage || "";
+      const contractIsOpen = !isClosedAction(effectiveAction);
+      rows.forEach((row, index) => recalculateLogTiming(row, contractIsOpen && index === rows.length - 1));
       const startDate = addCaseStartDateForContract(contract);
       contract.addCaseDate = startDate;
       const totalSla = configuredTotalSlaForContract(contract);
@@ -18425,10 +18431,10 @@ ${info?.placeholderTh || "กรุณาระบุข้อมูลที่
       contract.balance = totalSla - used;
       contract.systemDue = startDate ? addBusinessDays(startDate, totalSla) : (contract.systemDue || "");
       if (!contract.due) contract.due = contract.systemDue;
-      contract.alert = isClosedAction(contract.stage)
-        ? calculateAlert(contract.stage, contract.days, latest?.[8] || totalSla)
-        : (latest?.[10] || calculateAlert(contract.stage, contract.days, totalSla));
-      contract.status = calculateContractStatus(contract.stage, used, totalSla);
+      contract.alert = isClosedAction(effectiveAction)
+        ? calculateAlert(effectiveAction, contract.days, latest?.[8] || totalSla)
+        : (latest?.[10] || calculateAlert(effectiveAction, contract.days, totalSla));
+      contract.status = calculateContractStatus(effectiveAction, used, totalSla);
       return contract;
     }
 
